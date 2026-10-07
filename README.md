@@ -63,7 +63,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows-startup.ps1
 ```
 
 Installationen använder den inloggade användarens Windows Startup-mapp och kräver därför **inte**
-administratörsrättigheter. Startup-genvägen pekar direkt på `.venv\Scripts\pythonw.exe`, så normal
+administratörsrättigheter. Installern använder `uv venv` + `uv pip install` i `.venv` och lämnar
+inga genererade dependency-filer i Git-checkouten, så Docker-MCP:s clean-repo-skydd kan förbli aktiverat. Startup-genvägen pekar direkt på `.venv\Scripts\pythonw.exe`, så normal
 drift har **inget PowerShell- eller konsolfönster**. `install-windows-task.ps1` finns kvar som
 kompatibilitetswrapper och anropar samma per-user-installer.
 
