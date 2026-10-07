@@ -137,8 +137,15 @@ class StateStore:
             for row in rows
         ]
 
-    def mark_all_alerts_read(self) -> None:
-        self.con.execute("UPDATE alerts SET unread=0 WHERE unread=1")
+    def mark_alerts_read(self, item_keys: list[str]) -> None:
+        keys = [str(key) for key in item_keys if str(key)]
+        if not keys:
+            return
+        placeholders = ",".join("?" for _ in keys)
+        self.con.execute(
+            f"UPDATE alerts SET unread=0 WHERE item_key IN ({placeholders})",
+            keys,
+        )
         self.con.commit()
 
     def get_meta(self, key: str) -> str | None:
