@@ -22,7 +22,8 @@ class Config:
     official_symbols: tuple[str, ...] = ("ICEEUR:BRN1!",)
     poll_seconds: int = 20
     official_poll_seconds: int = 30
-    max_headlines: int = 25
+    dtv_max_headlines: int = 200
+    official_max_headlines: int = 25
     notification_min_score: int = 2
     startup_fresh_seconds: int = 120
 
@@ -34,10 +35,22 @@ class Config:
             config.save(path)
             return config
         raw = json.loads(path.read_text(encoding="utf-8"))
+        migrated = False
+        legacy_max = raw.pop("max_headlines", None)
+        if legacy_max is not None:
+            migrated = True
+        if "dtv_max_headlines" not in raw:
+            raw["dtv_max_headlines"] = 200
+            migrated = True
+        if "official_max_headlines" not in raw:
+            raw["official_max_headlines"] = min(int(legacy_max or 25), 100)
+            migrated = True
         if "official_symbols" in raw:
             raw["official_symbols"] = tuple(raw["official_symbols"])
         config = cls(**raw)
         config.validate()
+        if migrated:
+            config.save(path)
         return config
 
     def validate(self) -> None:
@@ -49,8 +62,10 @@ class Config:
             raise ValueError("poll_seconds must be between 5 and 3600")
         if not 5 <= int(self.official_poll_seconds) <= 3600:
             raise ValueError("official_poll_seconds must be between 5 and 3600")
-        if not 1 <= int(self.max_headlines) <= 100:
-            raise ValueError("max_headlines must be between 1 and 100")
+        if not 1 <= int(self.dtv_max_headlines) <= 200:
+            raise ValueError("dtv_max_headlines must be between 1 and 200")
+        if not 1 <= int(self.official_max_headlines) <= 100:
+            raise ValueError("official_max_headlines must be between 1 and 100")
         if not 0 <= int(self.notification_min_score) <= 10:
             raise ValueError("notification_min_score must be between 0 and 10")
         if not 0 <= int(self.startup_fresh_seconds) <= 3600:

@@ -9,7 +9,8 @@
   ],
   "poll_seconds": 20,
   "official_poll_seconds": 30,
-  "max_headlines": 25,
   "notification_min_score": 2,
-  "startup_fresh_seconds": 120
+  "startup_fresh_seconds": 120,
+  "dtv_max_headlines": 200,
+  "official_max_headlines": 25
 }

@@ -26,7 +26,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             try:
                 with patch(
                     "trade_alert.app._collect",
-                    new=AsyncMock(return_value=([item], False, True)),
+                    new=AsyncMock(return_value=([item], False, True, False)),
                 ), patch("trade_alert.app.notify", return_value=True):
                     result = await run_once(
                         Config(),
@@ -56,12 +56,37 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             try:
                 with patch(
                     "trade_alert.app._collect",
-                    new=AsyncMock(return_value=([item], False, True)),
+                    new=AsyncMock(return_value=([item], False, True, False)),
                 ), patch("trade_alert.app.notify", return_value=False):
                     result = await run_once(Config(), store)
 
                 self.assertEqual(0, result["notified"])
                 self.assertEqual(1, store.unread_alert_count())
+            finally:
+                store.close()
+
+    async def test_first_dtv_news_flow_cycle_baselines_old_broad_headlines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            old_item = Headline(
+                source="DTV_NEWS_FLOW",
+                item_id="old-oil",
+                title="Oil rises after Iran supply disruption",
+                published=time.time() - 3600,
+                provider="Reuters",
+            )
+            store.mark_initialized()
+            try:
+                with patch(
+                    "trade_alert.app._collect",
+                    new=AsyncMock(return_value=([old_item], True, True, True)),
+                ), patch("trade_alert.app.notify", return_value=True) as mocked_notify:
+                    result = await run_once(Config(), store)
+
+                self.assertEqual(0, result["notified"])
+                mocked_notify.assert_not_called()
+                self.assertIsNotNone(store.get_meta("dtv_news_flow_initialized_at"))
+                self.assertTrue(store.seen(old_item.key))
             finally:
                 store.close()
 

@@ -10,7 +10,14 @@ from datetime import datetime, timezone
 
 from .config import Config, app_dir
 from .mcp_client import MCPToolError
-from .news import Headline, fetch_dtv_news, fetch_official_news, relevance_score
+from .news import (
+    DTVWatchlistContext,
+    Headline,
+    fetch_dtv_news,
+    fetch_official_news,
+    relevance_score,
+    resolve_dtv_watchlist,
+)
 from .notifier import notify
 from .state import StateStore
 from .windows_ui import configure_windows_dpi_awareness
@@ -38,24 +45,69 @@ def _notification(item: Headline, score: int) -> tuple[str, str]:
     return title, body
 
 
-async def _collect(config: Config, *, include_official: bool, dtv_since: str | None) -> tuple[list[Headline], bool, bool]:
+def _cached_dtv_context(config: Config, store: StateStore) -> DTVWatchlistContext | None:
+    if config.dtv_watchlist_id:
+        return DTVWatchlistContext(
+            watchlist_id=config.dtv_watchlist_id,
+            name=store.get_meta("dtv_watchlist_name"),
+            symbols=(),
+            auto_discovered=False,
+        )
+
+    cached_id = store.get_meta("dtv_watchlist_id")
+    if cached_id and cached_id.isdigit():
+        return DTVWatchlistContext(
+            watchlist_id=cached_id,
+            name=store.get_meta("dtv_watchlist_name"),
+            symbols=(),
+            auto_discovered=True,
+        )
+    return None
+
+
+async def _resolve_dtv_context(config: Config, store: StateStore) -> DTVWatchlistContext:
+    cached = _cached_dtv_context(config, store)
+    if cached is not None:
+        return cached
+
+    context = await resolve_dtv_watchlist(url=config.dtv_url)
+    store.set_meta("dtv_watchlist_id", context.watchlist_id)
+    if context.name:
+        store.set_meta("dtv_watchlist_name", context.name)
+    return context
+
+
+async def _collect(
+    config: Config,
+    store: StateStore,
+    *,
+    include_official: bool,
+    dtv_since: str | None,
+) -> tuple[list[Headline], bool, bool, bool]:
     items: list[Headline] = []
     dtv_ok = False
+    dtv_fetched = False
     official_ok = False
 
-    if config.dtv_watchlist_id:
-        try:
-            items.extend(
-                await fetch_dtv_news(
-                    url=config.dtv_url,
-                    watchlist_id=config.dtv_watchlist_id,
-                    since=dtv_since,
-                    limit=config.max_headlines,
-                )
+    try:
+        context = await _resolve_dtv_context(config, store)
+        batch = await fetch_dtv_news(
+            url=config.dtv_url,
+            context=context,
+            since=dtv_since,
+            limit=config.dtv_max_headlines,
+        )
+        items.extend(batch.headlines)
+        dtv_fetched = True
+        dtv_ok = batch.coverage_complete
+        if batch.context.name:
+            store.set_meta("dtv_watchlist_name", batch.context.name)
+        if not batch.coverage_complete:
+            logging.warning(
+                "DTV News Flow returned a truncated/incomplete freshness window; cursor will not advance"
             )
-            dtv_ok = True
-        except MCPToolError as exc:
-            logging.warning("DTV news unavailable: %s", exc)
+    except MCPToolError as exc:
+        logging.warning("DTV News Flow unavailable: %s", exc)
 
     if include_official:
         for symbol in config.official_symbols:
@@ -64,7 +116,7 @@ async def _collect(config: Config, *, include_official: bool, dtv_since: str | N
                     await fetch_official_news(
                         url=config.trade_spine_url,
                         symbol=symbol,
-                        limit=config.max_headlines,
+                        limit=config.official_max_headlines,
                     )
                 )
                 official_ok = True
@@ -74,7 +126,7 @@ async def _collect(config: Config, *, include_official: bool, dtv_since: str | N
     deduped: dict[str, Headline] = {}
     for item in items:
         deduped[item.key] = item
-    return list(deduped.values()), dtv_ok, official_ok
+    return list(deduped.values()), dtv_ok, official_ok, dtv_fetched
 
 
 async def run_once(
@@ -85,9 +137,13 @@ async def run_once(
     alert_callback=None,
 ) -> dict:
     first_cycle = not store.initialized()
+    dtv_first_cycle = store.get_meta("dtv_news_flow_initialized_at") is None
     dtv_since = store.get_meta("dtv_last_success")
-    items, dtv_ok, official_ok = await _collect(
-        config, include_official=include_official, dtv_since=dtv_since
+    items, dtv_ok, official_ok, dtv_fetched = await _collect(
+        config,
+        store,
+        include_official=include_official,
+        dtv_since=dtv_since,
     )
     now = time.time()
     notified = 0
@@ -99,7 +155,12 @@ async def run_once(
         fresh += 1
         score = relevance_score(item)
         age = item.age_seconds
-        baseline_old = first_cycle and (age is None or age > config.startup_fresh_seconds)
+        source_is_initializing = first_cycle or (
+            item.source == "DTV_NEWS_FLOW" and dtv_first_cycle
+        )
+        baseline_old = source_is_initializing and (
+            age is None or age > config.startup_fresh_seconds
+        )
         if score >= config.notification_min_score and not baseline_old:
             title, body = _notification(item, score)
             inserted = store.record_alert(
@@ -124,22 +185,27 @@ async def run_once(
 
     if dtv_ok:
         store.set_meta("dtv_last_success", datetime.now(timezone.utc).isoformat())
+    if dtv_fetched and dtv_first_cycle:
+        store.set_meta("dtv_news_flow_initialized_at", datetime.now(timezone.utc).isoformat())
     if first_cycle:
         store.mark_initialized()
     store.prune()
 
     if include_official:
-        if not config.dtv_watchlist_id and not official_ok:
-            logging.error("No usable news source: DTV watchlist is unset and Official TradingView failed")
-        elif config.dtv_watchlist_id and not (dtv_ok or official_ok):
+        if not (dtv_ok or official_ok):
             logging.error("All configured news sources failed")
-    elif config.dtv_watchlist_id and not dtv_ok:
-        logging.warning("DTV news source failed on a DTV-only cycle")
+        elif not dtv_ok and official_ok:
+            logging.warning(
+                "Primary DTV News Flow is unavailable/incomplete; using Official TradingView fallback"
+            )
+    elif not dtv_ok:
+        logging.warning("Primary DTV News Flow failed on a News-Flow-only cycle")
 
     return {
         "fresh": fresh,
         "notified": notified,
         "dtv_ok": dtv_ok,
+        "dtv_fetched": dtv_fetched,
         "official_ok": official_ok,
     }
 
@@ -192,15 +258,15 @@ async def run_loop(
 
             if status_callback is not None:
                 if result["dtv_ok"] and last_official_ok:
-                    status_callback("Aktiv · DTV + Official TV", "ok")
+                    status_callback("Aktiv · News Flow primär + Official TV", "ok")
                 elif result["dtv_ok"]:
-                    status_callback("Aktiv · DTV", "ok")
+                    status_callback("Aktiv · News Flow primär", "ok")
                 elif last_official_ok:
-                    status_callback("Aktiv · Official TV", "ok")
+                    status_callback("Degraderad · Official TV fallback", "waiting")
                 elif include_official:
                     status_callback("Källfel · se logg", "error")
                 else:
-                    status_callback("Väntar på nästa källpoll", "waiting")
+                    status_callback("Källfel · News Flow", "error")
         except Exception:
             logging.exception("trade-alert cycle failed")
             if status_callback is not None:
