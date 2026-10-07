@@ -75,18 +75,23 @@ def monitoring_summary(config: Config) -> str:
     )
 
 
+def _local_timestamp(value: float | None) -> str:
+    if value is None:
+        return "okänd"
+    try:
+        return datetime.fromtimestamp(value).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    except (OSError, OverflowError, ValueError):
+        return "okänd"
+
+
 def format_alert_history(alerts: list[AlertRecord], unread_count: int) -> str:
     if not alerts:
         return "Inga riktiga Trade Alert-signaler har registrerats ännu."
 
     lines = [f"Olästa före öppning: {unread_count}", "", f"Senaste {len(alerts)} alerts:"]
     for alert in alerts:
-        timestamp = datetime.fromtimestamp(alert.created_at).astimezone().strftime("%Y-%m-%d %H:%M:%S")
-        published = (
-            datetime.fromtimestamp(alert.published).astimezone().strftime("%Y-%m-%d %H:%M:%S")
-            if alert.published is not None
-            else "okänd"
-        )
+        timestamp = _local_timestamp(alert.created_at)
+        published = _local_timestamp(alert.published)
         marker = "OLÄST" if alert.unread else "läst"
         provider = alert.provider or alert.source
         lines.extend(
