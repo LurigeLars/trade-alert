@@ -109,7 +109,20 @@ class TrayController:
             self._set_status("Pausad", "paused")
 
     def _test_notification(self, _icon, _item) -> None:
-        notify("Trade Alert", "Tray-appen fungerar.")
+        previous_status = self._status
+        previous_health = self._health
+        if notify("Trade Alert", "Tray-appen fungerar."):
+            self._set_status("Testnotis skickad", "ok")
+        else:
+            self._set_status("Notisfel · se logg", "error")
+            return
+
+        def restore() -> None:
+            self._set_status(previous_status, previous_health)
+
+        timer = threading.Timer(3.0, restore)
+        timer.daemon = True
+        timer.start()
 
     def _open_logs(self, _icon, _item) -> None:
         app_dir().mkdir(parents=True, exist_ok=True)
