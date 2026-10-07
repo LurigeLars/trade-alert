@@ -76,7 +76,13 @@ async def _collect(config: Config, *, include_official: bool, dtv_since: str | N
     return list(deduped.values()), dtv_ok, official_ok
 
 
-async def run_once(config: Config, store: StateStore, *, include_official: bool = True) -> dict:
+async def run_once(
+    config: Config,
+    store: StateStore,
+    *,
+    include_official: bool = True,
+    alert_callback=None,
+) -> dict:
     first_cycle = not store.initialized()
     dtv_since = store.get_meta("dtv_last_success")
     items, dtv_ok, official_ok = await _collect(
@@ -95,8 +101,21 @@ async def run_once(config: Config, store: StateStore, *, include_official: bool 
         baseline_old = first_cycle and (age is None or age > config.startup_fresh_seconds)
         if score >= config.notification_min_score and not baseline_old:
             title, body = _notification(item, score)
-            notify(title, body)
-            notified += 1
+            inserted = store.record_alert(
+                item_key=item.key,
+                source=item.source,
+                provider=item.provider,
+                headline=item.title,
+                body=body,
+                score=score,
+                published=item.published,
+                link=item.link,
+                at=now,
+            )
+            if inserted and alert_callback is not None:
+                alert_callback(store.unread_alert_count())
+            if notify(title, body):
+                notified += 1
         store.mark_seen(item.key, at=now)
 
     if dtv_ok:
@@ -136,6 +155,7 @@ async def run_loop(
     stop_event=None,
     pause_event=None,
     status_callback=None,
+    alert_callback=None,
 ) -> None:
     next_official = 0.0
     last_official_ok = False
@@ -150,7 +170,12 @@ async def run_loop(
         now = time.monotonic()
         include_official = now >= next_official
         try:
-            result = await run_once(config, store, include_official=include_official)
+            result = await run_once(
+                config,
+                store,
+                include_official=include_official,
+                alert_callback=alert_callback,
+            )
             if include_official:
                 last_official_ok = result["official_ok"]
             logging.info(
