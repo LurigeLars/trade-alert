@@ -44,6 +44,39 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(200, migrated["dtv_max_headlines"])
             self.assertEqual(25, migrated["official_max_headlines"])
 
+    def test_legacy_default_official_symbols_adds_rbob(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "profile_name": "Oil / Brent",
+                        "official_symbols": ["ICEEUR:BRN1!"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = Config.load(path)
+            self.assertEqual(("ICEEUR:BRN1!", "NYMEX:RB1!"), config.official_symbols)
+
+            migrated = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(["ICEEUR:BRN1!", "NYMEX:RB1!"], migrated["official_symbols"])
+
+    def test_custom_official_symbols_are_not_rewritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "profile_name": "Custom",
+                        "official_symbols": ["ICEEUR:BRN1!"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = Config.load(path)
+            self.assertEqual(("ICEEUR:BRN1!",), config.official_symbols)
+
     def test_theme_mode_round_trips(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "config.json"
