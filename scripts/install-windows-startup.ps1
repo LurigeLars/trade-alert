@@ -5,12 +5,21 @@ $RepoRoot = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
 Set-Location $RepoRoot
 
 $Uv = (Get-Command uv.exe -ErrorAction Stop).Source
-& $Uv sync --python 3.12
-if ($LASTEXITCODE -ne 0) {
-    throw "uv sync failed with exit code $LASTEXITCODE"
+$Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+$Pythonw = Join-Path $RepoRoot '.venv\Scripts\pythonw.exe'
+
+if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
+    & $Uv venv --python 3.12 .venv
+    if ($LASTEXITCODE -ne 0) {
+        throw "uv venv failed with exit code $LASTEXITCODE"
+    }
 }
 
-$Pythonw = Join-Path $RepoRoot '.venv\Scripts\pythonw.exe'
+& $Uv pip install --python $Python --editable .
+if ($LASTEXITCODE -ne 0) {
+    throw "uv pip install failed with exit code $LASTEXITCODE"
+}
+
 if (-not (Test-Path -LiteralPath $Pythonw -PathType Leaf)) {
     throw "pythonw.exe was not created at $Pythonw"
 }
