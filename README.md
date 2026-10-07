@@ -35,6 +35,17 @@ Om `dtv_watchlist_id` är `null` kör Trade Alert ändå via Official TradingVie
 
 Krav: Windows, Python 3.12 via `uv`, lokal Trade Spine HTTP-runtime på `127.0.0.1:8773`.
 
+För en ny lokal checkout:
+
+```powershell
+Set-Location C:\ClaudeCode
+git clone https://github.com/LurigeLars/trade-alert.git
+Set-Location .\trade-alert
+```
+
+Om katalogen redan finns men saknar `trade_alert\__main__.py`, byt namn på den gamla katalogen och klona om
+i stället för att försöka köra en ofullständig ZIP-extraktion.
+
 ```powershell
 cd C:\path\to\trade-alert
 uv run --python 3.12 --with mcp==2.2.0 python -m unittest discover -s tests -p "test_*.py"
