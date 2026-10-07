@@ -1,0 +1,11 @@
+{
+  "dtv_url": "http://127.0.0.1:8765/mcp",
+  "trade_spine_url": "http://127.0.0.1:8773/mcp",
+  "dtv_watchlist_id": null,
+  "official_symbols": ["ICEEUR:BRN1!"],
+  "poll_seconds": 20,
+  "official_poll_seconds": 30,
+  "max_headlines": 25,
+  "notification_min_score": 2,
+  "startup_fresh_seconds": 120
+}
