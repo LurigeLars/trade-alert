@@ -397,6 +397,7 @@ class TrayController:
                 self.config.theme_mode,
             )
         flush_windows_menu_themes()
+        icon.visible = True
 
     def _load_unread_count(self) -> int:
         store = StateStore()
