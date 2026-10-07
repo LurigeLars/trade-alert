@@ -92,13 +92,19 @@ def format_alert_history(alerts: list[AlertRecord], unread_count: int) -> str:
     lines = [f"Olästa före öppning: {unread_count}", "", f"Senaste {len(alerts)} alerts:"]
     for alert in alerts:
         timestamp = datetime.fromtimestamp(alert.created_at).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        published = (
+            datetime.fromtimestamp(alert.published).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+            if alert.published is not None
+            else "okänd"
+        )
         marker = "OLÄST" if alert.unread else "läst"
         provider = alert.provider or alert.source
         lines.extend(
             [
                 "",
-                f"[{marker}] {timestamp} · {provider} · relevans {alert.score}",
+                f"[{marker}] registrerad {timestamp} · {provider} · relevans {alert.score}",
                 alert.headline,
+                f"Publicerad: {published}",
                 f"Källa: {alert.source}",
             ]
         )
