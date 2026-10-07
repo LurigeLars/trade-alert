@@ -231,7 +231,7 @@ class TrayController:
             unread_before = store.unread_alert_count()
             alerts = store.recent_alerts(limit=10)
             text = format_alert_history(alerts, unread_before)
-            store.mark_all_alerts_read()
+            store.mark_alerts_read([alert.item_key for alert in alerts])
             self._unread_count = store.unread_alert_count()
         finally:
             store.close()
