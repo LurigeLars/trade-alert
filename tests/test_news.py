@@ -42,6 +42,14 @@ class NewsTests(unittest.IsolatedAsyncioTestCase):
         row = normalize_headlines(payload, source="TV")[0]
         self.assertEqual(2, relevance_score(row))
 
+    def test_hormuz_is_relevant_without_oil_symbol_context(self):
+        payload = {"headlines": [{
+            "id": "hormuz", "title": "Iran says routes through Strait of Hormuz will be blocked",
+            "published": time.time(),
+        }]}
+        row = normalize_headlines(payload, source="DTV_NEWS_FLOW")[0]
+        self.assertGreaterEqual(relevance_score(row), 4)
+
     def test_impact_word_without_oil_context_does_not_alert(self):
         payload = {"headlines": [{
             "id": "deal", "title": "Software company announces strategic deal",
