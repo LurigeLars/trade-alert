@@ -18,6 +18,13 @@ from .notifier import notify
 from .state import AlertRecord, StateStore
 
 Health = Literal["ok", "waiting", "error", "paused"]
+Theme = Literal["light", "dark"]
+
+_THEME_LABELS = {
+    "system": "Följ Windows",
+    "light": "Ljust",
+    "dark": "Mörkt",
+}
 
 
 def make_status_icon(health: Health = "waiting", unread: int = 0) -> Image.Image:
@@ -108,11 +115,198 @@ def format_alert_history(alerts: list[AlertRecord], unread_count: int) -> str:
     return "\n".join(lines)
 
 
-def _show_native_text(title: str, text: str) -> None:
-    if os.name == "nt":
-        ctypes.windll.user32.MessageBoxW(0, text, title, 0x00000040)
-    else:
+def windows_apps_use_dark_mode() -> bool:
+    """Return the current Windows app-theme preference; fail safely to light."""
+    if os.name != "nt":
+        return False
+
+    try:
+        import winreg
+
+        path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as key:
+            value, _kind = winreg.QueryValueEx(key, "AppsUseLightTheme")
+        return int(value) == 0
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def resolve_theme(theme_mode: str, *, system_dark: bool | None = None) -> Theme:
+    if theme_mode == "dark":
+        return "dark"
+    if theme_mode == "light":
+        return "light"
+    if system_dark is None:
+        system_dark = windows_apps_use_dark_mode()
+    return "dark" if system_dark else "light"
+
+
+def theme_palette(theme: Theme) -> dict[str, str]:
+    if theme == "dark":
+        return {
+            "window": "#202020",
+            "surface": "#1e1e1e",
+            "text": "#f3f3f3",
+            "muted": "#b9b9b9",
+            "border": "#3f3f46",
+            "button": "#2d2d30",
+            "button_active": "#3a3a3d",
+            "selection": "#264f78",
+            "selection_text": "#ffffff",
+        }
+    return {
+        "window": "#f6f6f6",
+        "surface": "#ffffff",
+        "text": "#202020",
+        "muted": "#5f5f5f",
+        "border": "#d0d0d0",
+        "button": "#e9e9e9",
+        "button_active": "#dcdcdc",
+        "selection": "#0078d4",
+        "selection_text": "#ffffff",
+    }
+
+
+def _apply_windows_titlebar_theme(root, *, dark: bool) -> None:
+    if os.name != "nt":
+        return
+    try:
+        root.update_idletasks()
+        hwnd = root.winfo_id()
+        value = ctypes.c_int(1 if dark else 0)
+        dwm = ctypes.windll.dwmapi
+        for attribute in (20, 19):
+            result = dwm.DwmSetWindowAttribute(
+                hwnd,
+                attribute,
+                ctypes.byref(value),
+                ctypes.sizeof(value),
+            )
+            if result == 0:
+                break
+    except Exception:
+        logging.debug("Could not apply Windows title-bar theme", exc_info=True)
+
+
+def _show_text_window(title: str, text: str, theme_mode: str) -> None:
+    """Open a selectable, copyable information window using the effective theme."""
+    if os.name != "nt":
         logging.info("%s\n%s", title, text)
+        return
+
+    def run_window() -> None:
+        import tkinter as tk
+
+        theme = resolve_theme(theme_mode)
+        palette = theme_palette(theme)
+
+        root = tk.Tk()
+        root.title(title)
+        root.geometry("860x680")
+        root.minsize(620, 420)
+        root.configure(bg=palette["window"])
+        _apply_windows_titlebar_theme(root, dark=theme == "dark")
+
+        outer = tk.Frame(root, bg=palette["window"], padx=14, pady=14)
+        outer.pack(fill="both", expand=True)
+
+        text_frame = tk.Frame(
+            outer,
+            bg=palette["surface"],
+            highlightbackground=palette["border"],
+            highlightthickness=1,
+        )
+        text_frame.pack(fill="both", expand=True)
+
+        scrollbar = tk.Scrollbar(text_frame)
+        scrollbar.pack(side="right", fill="y")
+
+        text_widget = tk.Text(
+            text_frame,
+            wrap="word",
+            yscrollcommand=scrollbar.set,
+            bg=palette["surface"],
+            fg=palette["text"],
+            insertbackground=palette["text"],
+            selectbackground=palette["selection"],
+            selectforeground=palette["selection_text"],
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+            padx=16,
+            pady=14,
+            font=("Segoe UI", 10),
+            spacing1=1,
+            spacing3=2,
+        )
+        text_widget.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=text_widget.yview)
+
+        text_widget.insert("1.0", text)
+
+        headings = {"Profil", "Källor", "Polling", "Alerttröskel", "Första start", "Modell"}
+        text_widget.tag_configure("heading", font=("Segoe UI Semibold", 10))
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if line.strip() in headings:
+                text_widget.tag_add("heading", f"{line_number}.0", f"{line_number}.end")
+
+        text_widget.configure(state="disabled")
+
+        button_bar = tk.Frame(outer, bg=palette["window"], pady=10)
+        button_bar.pack(fill="x")
+
+        def select_all(_event=None):
+            text_widget.tag_add("sel", "1.0", "end-1c")
+            text_widget.mark_set("insert", "1.0")
+            text_widget.see("1.0")
+            return "break"
+
+        def copy_selection(_event=None):
+            try:
+                selected = text_widget.get("sel.first", "sel.last")
+            except tk.TclError:
+                return "break"
+            root.clipboard_clear()
+            root.clipboard_append(selected)
+            root.update()
+            return "break"
+
+        def copy_all() -> None:
+            root.clipboard_clear()
+            root.clipboard_append(text)
+            root.update()
+
+        def new_button(label: str, command):
+            return tk.Button(
+                button_bar,
+                text=label,
+                command=command,
+                bg=palette["button"],
+                fg=palette["text"],
+                activebackground=palette["button_active"],
+                activeforeground=palette["text"],
+                relief="flat",
+                borderwidth=0,
+                padx=14,
+                pady=7,
+                font=("Segoe UI", 9),
+                cursor="hand2",
+            )
+
+        new_button("Kopiera allt", copy_all).pack(side="left")
+        new_button("Stäng", root.destroy).pack(side="right")
+
+        text_widget.bind("<Control-a>", select_all)
+        text_widget.bind("<Control-A>", select_all)
+        text_widget.bind("<Control-c>", copy_selection)
+        text_widget.bind("<Control-C>", copy_selection)
+        root.bind("<Escape>", lambda _event: root.destroy())
+        text_widget.focus_set()
+
+        root.mainloop()
+
+    thread = threading.Thread(target=run_window, name="TradeAlertInfoWindow", daemon=True)
+    thread.start()
 
 
 class TrayController:
@@ -131,6 +325,29 @@ class TrayController:
                 pystray.MenuItem(lambda _item: self._status_line(), None, enabled=False),
                 pystray.MenuItem(lambda _item: self._alerts_label(), self._show_alert_history),
                 pystray.MenuItem("Vad bevakas?", self._show_monitoring),
+                pystray.MenuItem(
+                    "Tema",
+                    pystray.Menu(
+                        pystray.MenuItem(
+                            _THEME_LABELS["system"],
+                            self._set_theme("system"),
+                            checked=self._theme_checked("system"),
+                            radio=True,
+                        ),
+                        pystray.MenuItem(
+                            _THEME_LABELS["light"],
+                            self._set_theme("light"),
+                            checked=self._theme_checked("light"),
+                            radio=True,
+                        ),
+                        pystray.MenuItem(
+                            _THEME_LABELS["dark"],
+                            self._set_theme("dark"),
+                            checked=self._theme_checked("dark"),
+                            radio=True,
+                        ),
+                    ),
+                ),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem(
                     lambda _item: "Återuppta bevakning" if self.pause_event.is_set() else "Pausa bevakning",
@@ -209,6 +426,17 @@ class TrayController:
         self._unread_count = max(0, int(unread_count))
         self._refresh_tray()
 
+    def _theme_checked(self, mode: str):
+        return lambda _item: self.config.theme_mode == mode
+
+    def _set_theme(self, mode: str):
+        def handler(_icon, _item) -> None:
+            self.config.theme_mode = mode
+            self.config.save()
+            self.icon.update_menu()
+
+        return handler
+
     def _toggle_pause(self, _icon, _item) -> None:
         if self.pause_event.is_set():
             self.pause_event.clear()
@@ -218,13 +446,7 @@ class TrayController:
             self._set_status("Pausad", "paused")
 
     def _show_monitoring(self, _icon, _item) -> None:
-        text = monitoring_summary(self.config)
-        thread = threading.Thread(
-            target=_show_native_text,
-            args=("Trade Alert · Vad bevakas?", text),
-            daemon=True,
-        )
-        thread.start()
+        _show_text_window("Trade Alert · Vad bevakas?", monitoring_summary(self.config), self.config.theme_mode)
 
     def _show_alert_history(self, _icon, _item) -> None:
         store = StateStore()
@@ -238,12 +460,7 @@ class TrayController:
             store.close()
 
         self._refresh_tray()
-        thread = threading.Thread(
-            target=_show_native_text,
-            args=("Trade Alert · Senaste alerts", text),
-            daemon=True,
-        )
-        thread.start()
+        _show_text_window("Trade Alert · Senaste alerts", text, self.config.theme_mode)
 
     def _test_notification(self, _icon, _item) -> None:
         previous_status = self._status
