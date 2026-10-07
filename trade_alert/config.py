@@ -14,7 +14,7 @@ def app_dir() -> Path:
 
 @dataclass(slots=True)
 class Config:
-    profile_name: str = "BULL OLJA X16 AVA 2 / Brent"
+    profile_name: str = "Oil / Brent"
     theme_mode: str = "system"
     dtv_url: str = "http://127.0.0.1:8765/mcp"
     trade_spine_url: str = "http://127.0.0.1:8773/mcp"
