@@ -10,11 +10,11 @@ pollar/streamar nyheter tätt och visar lokala notifieringar. Att hålla den sep
 hindrar UI/Windows-fel från att påverka Trade Spine.
 
 ```text
-DTV News Flow (primär, när watchlist-id är satt)
+DTV TradingView News Flow (primär broad discovery, max 200)
                \
-                -> Trade Alert -> dedupe/relevans -> Windows toast
+                -> Trade Alert -> deterministic oil relevance -> Windows toast
                /
-Official TradingView via Trade Spine intelligence_state (fallback/komplettering)
+Official TradingView symbol-news via Trade Spine (targeted corroboration/fallback)
 ```
 
 ### Gränser
@@ -25,12 +25,18 @@ Official TradingView via Trade Spine intelligence_state (fallback/komplettering)
 
 ## Nuvarande oil-profil
 
-Standardprofilen heter `Oil / Brent` och använder `ICEEUR:BRN1!` för Official TradingView
-News. Den symbolen är verifierad mot TradingViews nyhetsfeed för Brent och ska inte ersättas av en gissad
-alias-symbol. Profilnamnet kan ändras lokalt i `config.json` utan att ändra source-routing.
+Standardprofilen heter `Oil / Brent`.
 
-DTV News Flow är avsedd som primär snabb feed, men dess verktyg kräver ett numeriskt TradingView-watchlist-ID.
-Om `dtv_watchlist_id` är `null` kör Trade Alert ändå via Official TradingView-fallbacken.
+**Primär discovery är TradingView Desktop News Flow**, i linje med Trade Spines källpolicy efter den
+praktiska källutvärderingen. En kontrakt-/ticker-specifik Brent-feed kan vara glest taggad och används
+därför inte som primär discovery. Official TradingView `ICEEUR:BRN1!` finns kvar som verifierad
+**targeted corroboration/fallback**, inte som huvudflöde.
+
+Om `dtv_watchlist_id` är `null` använder Trade Alert inte längre symbol-news som normal primärväg.
+Den läser i stället den aktiva TradingView-watchlisten via `watchlist_get`, kräver minst ett verifierat
+oljeankare (Brent/WTI/refined-product routing symbol), och sparar det upplösta numeriska ID:t endast
+lokalt i SQLite. Därmed kan broad News Flow användas utan att ett användarspecifikt watchlist-ID
+committas till repot. Ett explicit lokalt `dtv_watchlist_id` kan fortfarande pinna en bestämd lista.
 
 ## Installation / test
 
@@ -79,9 +85,10 @@ senaste 10 signalerna med full rubrik, provider, källa, publiceringstid, releva
 finns. Endast de alerts som faktiskt visas markeras lästa; en ny alert som kommer samtidigt behåller sin
 unread-status.
 
-**Vad bevakas?** visar den effektiva konfigurationen direkt i UI:t: profilnamn, Official TradingView-symboler,
-DTV-status, pollingintervall, max headlines, alerttröskel och de deterministiska scoringreglerna. Det kräver
-inte att användaren öppnar loggfilen.
+**Vad bevakas?** visar den effektiva routingmodellen direkt i UI:t: DTV News Flow som primär broad discovery,
+lokalt auto-pinnad watchlist när sådan har upplösts, Official TradingView som targeted corroboration,
+separata polling/limit-värden och de deterministiska scoringreglerna. Det kräver inte att användaren
+öppnar loggfilen.
 
 Informationsfönstren för **Vad bevakas?** och **Senaste alerts** använder ett eget läsfönster i stället för
 Windows MessageBox. Texten är markerbar, stöder **Ctrl+A/Ctrl+C**, har **Kopiera allt**, scrollbar och
@@ -106,15 +113,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-windows-startup.ps1
 
 ## Relevansfilter
 
-V0.1 använder deterministisk headline-ranking, inte en LLM i hot path. Signal får poäng från bland annat:
+Broad News Flow kräver hårdare routing än symbol-news. V0.1 använder därför deterministisk ranking utan
+LLM i hot path:
 
-- oil/crude/Brent/WTI/OPEC;
-- Iran/Hormuz/Saudi/Russia/sanktioner/pipelines/tankers/inventories/produktion;
-- TradingView `urgency=1`;
-- explicit Brent-relaterad symbol i provider-payloaden.
+- explicit olje/core-term i rubriken ger +2;
+- impact-termer som Iran/Hormuz/supply/tanker ger +2 **endast när oljecontext redan finns**;
+- en provider-relaterad Brent/WTI/refined-product-symbol ger +1 som routing evidence;
+- `urgency=1` ger +1 endast i oljecontext;
+- en relaterad symbol ensam kan aldrig nå alerttröskeln.
 
-Det gör notifieringsvägen snabb och reproducerbar. En senare version kan lägga till prisrespons och en
-separat modellbedömning efter att själva headline-notisen redan har gått ut.
+Det förhindrar att generiska broad-feed-rubriker med ord som `deal` eller `increase` blir falska
+oljealerts, samtidigt som exempelvis en Iran/Hormuz-rubrik med olje-routing kan passera även om ordet
+`oil` saknas i själva rubriken.
+
+Första gången broad News Flow aktiveras baselinas gamla artiklar; bara mycket färska artiklar får notifiera
+direkt. Därefter används source cursor och headline-dedupe.
 
 ## Lokal state och privacy
 

@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 from .app import LOG_PATH, run_loop
 from .config import Config, app_dir
-from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS
+from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS, OIL_ROUTING_SYMBOLS
 from .notifier import notify
 from .state import AlertRecord, StateStore
 
@@ -51,32 +51,47 @@ def make_status_icon(health: Health = "waiting", unread: int = 0) -> Image.Image
     return image
 
 
-def monitoring_summary(config: Config) -> str:
-    dtv = (
-        f"AKTIV · watchlist {config.dtv_watchlist_id}"
-        if config.dtv_watchlist_id
-        else "INAKTIV · numeriskt watchlist-ID saknas"
-    )
+def monitoring_summary(
+    config: Config,
+    *,
+    resolved_watchlist_name: str | None = None,
+    auto_pinned_watchlist: bool = False,
+) -> str:
     symbols = ", ".join(config.official_symbols) or "inga"
-    related = "ICEEUR:BRN1!, TVC:UKOIL"
+    routing = ", ".join(sorted(OIL_ROUTING_SYMBOLS))
+
+    if config.dtv_watchlist_id:
+        dtv_context = "pinnad lokal TradingView-watchlist"
+    elif auto_pinned_watchlist:
+        name = resolved_watchlist_name or "namn okänt"
+        dtv_context = f"auto-pinnad lokalt från aktiv TradingView-lista · {name}"
+    else:
+        dtv_context = (
+            "auto-upptäcker aktiv TradingView-watchlist vid första körning; "
+            "minst ett verifierat oljeankare krävs"
+        )
 
     return (
         f"Profil\n{config.profile_name}\n\n"
         f"Källor\n"
-        f"• Official TradingView News: AKTIV · {symbols}\n"
-        f"• DTV News Flow: {dtv}\n\n"
+        f"• DTV TradingView News Flow: PRIMÄR · broad discovery\n"
+        f"  {dtv_context}\n"
+        f"• Official TradingView symbol-news: SEKUNDÄR · targeted corroboration\n"
+        f"  {symbols}\n\n"
         f"Polling\n"
-        f"• huvudloop: var {config.poll_seconds} s\n"
-        f"• Official TradingView: var {config.official_poll_seconds} s\n"
-        f"• max {config.max_headlines} headlines per hämtning\n\n"
-        f"Alerttröskel\n"
+        f"• News Flow: var {config.poll_seconds} s · max {config.dtv_max_headlines} headlines\n"
+        f"• Official TradingView: var {config.official_poll_seconds} s · "
+        f"max {config.official_max_headlines} headlines/symbol\n\n"
+        f"Alertfilter\n"
         f"• relevanspoäng ≥ {config.notification_min_score}\n"
-        f"• +2 om rubriken innehåller core-termer:\n  {', '.join(CORE_TERM_LABELS)}\n"
-        f"• +2 om rubriken innehåller impact-termer:\n  {', '.join(IMPACT_TERM_LABELS)}\n"
-        f"• +2 om TradingView urgency = 1\n"
-        f"• +2 om relaterad symbol är {related}\n\n"
-        f"Första start\n"
-        f"• äldre headlines än {config.startup_fresh_seconds} s baselinas utan alert\n\n"
+        f"• +2 för explicit olje/core-term i rubriken:\n  {', '.join(CORE_TERM_LABELS)}\n"
+        f"• +2 för impact-term ENDAST när oljecontext finns:\n  {', '.join(IMPACT_TERM_LABELS)}\n"
+        f"• +1 för olje-relaterad provider-symbol (routing evidence, räcker aldrig ensam)\n"
+        f"• +1 för TradingView urgency = 1, endast när oljecontext finns\n"
+        f"• routing-symboler: {routing}\n\n"
+        f"Första News Flow-start\n"
+        f"• äldre headlines än {config.startup_fresh_seconds} s baselinas utan alert\n"
+        f"• watchlist-ID sparas endast lokalt i Trade Alert-state; inget konto-ID committas\n\n"
         f"Modell\n"
         f"• ingen LLM används i hot path"
     )
@@ -244,7 +259,7 @@ def _show_text_window(title: str, text: str, theme_mode: str) -> None:
 
         text_widget.insert("1.0", text)
 
-        headings = {"Profil", "Källor", "Polling", "Alerttröskel", "Första start", "Modell"}
+        headings = {"Profil", "Källor", "Polling", "Alertfilter", "Första News Flow-start", "Modell"}
         text_widget.tag_configure("heading", font=("Segoe UI Semibold", 10))
         for line_number, line in enumerate(text.splitlines(), start=1):
             if line.strip() in headings:
@@ -446,7 +461,19 @@ class TrayController:
             self._set_status("Pausad", "paused")
 
     def _show_monitoring(self, _icon, _item) -> None:
-        _show_text_window("Trade Alert · Vad bevakas?", monitoring_summary(self.config), self.config.theme_mode)
+        store = StateStore()
+        try:
+            cached_id = store.get_meta("dtv_watchlist_id")
+            cached_name = store.get_meta("dtv_watchlist_name")
+        finally:
+            store.close()
+
+        text = monitoring_summary(
+            self.config,
+            resolved_watchlist_name=cached_name,
+            auto_pinned_watchlist=bool(cached_id and not self.config.dtv_watchlist_id),
+        )
+        _show_text_window("Trade Alert · Vad bevakas?", text, self.config.theme_mode)
 
     def _show_alert_history(self, _icon, _item) -> None:
         store = StateStore()
