@@ -59,7 +59,20 @@ Gamla headlines baselinas på första körningen; endast mycket färska headline
 När engångstestet ser bra ut:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows-task.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows-startup.ps1
+```
+
+Installationen använder den inloggade användarens Windows Startup-mapp och kräver därför **inte**
+administratörsrättigheter. Den startar Trade Alert direkt och vid framtida Windows-inloggningar.
+`install-windows-task.ps1` finns kvar som kompatibilitetswrapper och anropar samma per-user-installer.
+
+Runnern startar om workern efter fem sekunder om processen kraschar med en felkod. Ingen broker-write
+eller elevated process introduceras.
+
+Avinstallation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-windows-startup.ps1
 ```
 
 ## Relevansfilter
