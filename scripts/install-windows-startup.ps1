@@ -2,8 +2,19 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $RepoRoot = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
-$Runner = (Resolve-Path (Join-Path $PSScriptRoot 'run-trade-alert.ps1')).Path
-$PowerShell = (Get-Command powershell.exe -ErrorAction Stop).Source
+Set-Location $RepoRoot
+
+$Uv = (Get-Command uv.exe -ErrorAction Stop).Source
+& $Uv sync --python 3.12
+if ($LASTEXITCODE -ne 0) {
+    throw "uv sync failed with exit code $LASTEXITCODE"
+}
+
+$Pythonw = Join-Path $RepoRoot '.venv\Scripts\pythonw.exe'
+if (-not (Test-Path -LiteralPath $Pythonw -PathType Leaf)) {
+    throw "pythonw.exe was not created at $Pythonw"
+}
+
 $Startup = [Environment]::GetFolderPath('Startup')
 if ([string]::IsNullOrWhiteSpace($Startup)) {
     throw 'Could not resolve the current user Startup folder.'
@@ -12,39 +23,32 @@ if ([string]::IsNullOrWhiteSpace($Startup)) {
 $ShortcutPath = Join-Path $Startup 'Trade Alert.lnk'
 $Shell = New-Object -ComObject WScript.Shell
 $Shortcut = $Shell.CreateShortcut($ShortcutPath)
-$Shortcut.TargetPath = $PowerShell
-$Shortcut.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Runner`""
+$Shortcut.TargetPath = $Pythonw
+$Shortcut.Arguments = '-m trade_alert'
 $Shortcut.WorkingDirectory = $RepoRoot
 $Shortcut.WindowStyle = 7
-$Shortcut.Description = 'Trade Alert local news notifier'
+$Shortcut.Description = 'Trade Alert tray app'
 $Shortcut.Save()
 
-$AlreadyRunning = $false
+# Stop the legacy PowerShell runner and any old Trade Alert worker before replacing it.
 try {
-    $AlreadyRunning = $null -ne (
-        Get-CimInstance Win32_Process -ErrorAction Stop |
-            Where-Object { $_.CommandLine -match '[\\/]run-trade-alert\.ps1' } |
-            Select-Object -First 1
-    )
+    $Legacy = Get-CimInstance Win32_Process -ErrorAction Stop |
+        Where-Object {
+            $_.ProcessId -ne $PID -and (
+                $_.CommandLine -match '[\\/]run-trade-alert\.ps1' -or
+                $_.CommandLine -match '(?i)-m\s+trade_alert(?:\s|$)'
+            )
+        }
+    foreach ($Process in $Legacy) {
+        Stop-Process -Id $Process.ProcessId -Force -ErrorAction SilentlyContinue
+    }
 }
 catch {
-    Write-Warning "Could not inspect running processes; the startup shortcut was still installed."
+    Write-Warning 'Could not inspect old Trade Alert processes; the new startup shortcut was still installed.'
 }
 
-if (-not $AlreadyRunning) {
-    Start-Process -FilePath $PowerShell -ArgumentList @(
-        '-NoProfile',
-        '-WindowStyle', 'Hidden',
-        '-ExecutionPolicy', 'Bypass',
-        '-File', $Runner
-    ) -WorkingDirectory $RepoRoot
-}
+Start-Process -FilePath $Pythonw -ArgumentList @('-m', 'trade_alert') -WorkingDirectory $RepoRoot
 
-Write-Host "Installed per-user startup shortcut: $ShortcutPath"
-Write-Host "Trade Alert starts at Windows logon without administrator rights."
-if ($AlreadyRunning) {
-    Write-Host 'Trade Alert was already running; no duplicate process was started.'
-}
-else {
-    Write-Host 'Trade Alert started now.'
-}
+Write-Host "Installed per-user tray startup: $ShortcutPath"
+Write-Host "Trade Alert started with pythonw.exe; no console window should remain open."
+Write-Host "Look for the Trade Alert icon in the notification area beside the clock."

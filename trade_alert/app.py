@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
+import sys
 import time
 from datetime import datetime, timezone
 
@@ -17,10 +19,13 @@ LOG_PATH = app_dir() / "trade-alert.log"
 
 def _setup_logging(verbose: bool = False) -> None:
     app_dir().mkdir(parents=True, exist_ok=True)
+    handlers: list[logging.Handler] = [logging.FileHandler(LOG_PATH, encoding="utf-8")]
+    if sys.stderr is not None:
+        handlers.append(logging.StreamHandler())
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
-        handlers=[logging.FileHandler(LOG_PATH, encoding="utf-8"), logging.StreamHandler()],
+        handlers=handlers,
     )
 
 
@@ -116,13 +121,38 @@ async def run_once(config: Config, store: StateStore, *, include_official: bool 
     }
 
 
-async def run_loop(config: Config, store: StateStore) -> None:
+async def _sleep_interruptible(seconds: float, stop_event=None) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            return
+        await asyncio.sleep(min(0.5, max(0.0, deadline - time.monotonic())))
+
+
+async def run_loop(
+    config: Config,
+    store: StateStore,
+    *,
+    stop_event=None,
+    pause_event=None,
+    status_callback=None,
+) -> None:
     next_official = 0.0
-    while True:
+    last_official_ok = False
+
+    while stop_event is None or not stop_event.is_set():
+        if pause_event is not None and pause_event.is_set():
+            if status_callback is not None:
+                status_callback("Pausad", "paused")
+            await _sleep_interruptible(0.5, stop_event)
+            continue
+
         now = time.monotonic()
         include_official = now >= next_official
         try:
             result = await run_once(config, store, include_official=include_official)
+            if include_official:
+                last_official_ok = result["official_ok"]
             logging.info(
                 "cycle fresh=%s notified=%s dtv=%s official=%s",
                 result["fresh"],
@@ -130,11 +160,26 @@ async def run_loop(config: Config, store: StateStore) -> None:
                 result["dtv_ok"],
                 result["official_ok"],
             )
+
+            if status_callback is not None:
+                if result["dtv_ok"] and last_official_ok:
+                    status_callback("Aktiv · DTV + Official TV", "ok")
+                elif result["dtv_ok"]:
+                    status_callback("Aktiv · DTV", "ok")
+                elif last_official_ok:
+                    status_callback("Aktiv · Official TV", "ok")
+                elif include_official:
+                    status_callback("Källfel · se logg", "error")
+                else:
+                    status_callback("Väntar på nästa källpoll", "waiting")
         except Exception:
             logging.exception("trade-alert cycle failed")
+            if status_callback is not None:
+                status_callback("Fel · se logg", "error")
+
         if include_official:
             next_official = time.monotonic() + config.official_poll_seconds
-        await asyncio.sleep(config.poll_seconds)
+        await _sleep_interruptible(config.poll_seconds, stop_event)
 
 
 def main() -> None:
@@ -142,6 +187,7 @@ def main() -> None:
     parser.add_argument("--once", action="store_true", help="Run one acquisition cycle and exit")
     parser.add_argument("--test-notification", action="store_true", help="Show a Windows test notification and exit")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--no-tray", action="store_true", help="Run the monitor in the foreground without a tray icon")
     args = parser.parse_args()
 
     _setup_logging(args.verbose)
@@ -155,10 +201,19 @@ def main() -> None:
         if args.once:
             result = asyncio.run(run_once(config, store))
             print(result)
-        else:
-            asyncio.run(run_loop(config, store))
+            return
     finally:
         store.close()
+
+    if os.name == "nt" and not args.no_tray:
+        from .tray import run_tray
+        run_tray(config)
+    else:
+        foreground_store = StateStore()
+        try:
+            asyncio.run(run_loop(config, foreground_store))
+        finally:
+            foreground_store.close()
 
 
 if __name__ == "__main__":
