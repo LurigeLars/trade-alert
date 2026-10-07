@@ -6,3 +6,4 @@ __pycache__/
 *.sqlite*
 config.json
 *.log
+uv.lock
