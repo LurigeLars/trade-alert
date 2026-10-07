@@ -71,6 +71,10 @@ När appen körs syns Trade Alert i Windows notification area (ibland under pile
 har pinnat ikonen). Menyn visar aktuell källstatus och har **Pausa/Återuppta**, **Testnotis**,
 **Öppna loggmapp** och **Avsluta Trade Alert**.
 
+**Testnotis** går genom samma notifieringsbackend som riktiga nyhetsalerts. Windows-notiser skickas via
+`windows-toasts`, inte via en dold PowerShell-process. Om backend-anropet misslyckas visar tray-status
+`Notisfel · se logg` och felet skrivs till `%LOCALAPPDATA%\TradeAlert\trade-alert.log`.
+
 Ingen broker-write eller elevated process introduceras.
 
 Avinstallation:
