@@ -141,10 +141,9 @@ class StateStore:
         keys = [str(key) for key in item_keys if str(key)]
         if not keys:
             return
-        placeholders = ",".join("?" for _ in keys)
-        self.con.execute(
-            f"UPDATE alerts SET unread=0 WHERE item_key IN ({placeholders})",
-            keys,
+        self.con.executemany(
+            "UPDATE alerts SET unread=0 WHERE item_key=?",
+            [(key,) for key in keys],
         )
         self.con.commit()
 
