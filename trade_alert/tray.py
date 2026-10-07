@@ -6,12 +6,12 @@ import logging
 import os
 import threading
 from datetime import datetime
-from typing import Literal
+from pathlib import Path
+from typing import Awaitable, Callable, Literal
 
 import pystray
 from PIL import Image, ImageDraw
 
-from .app import LOG_PATH, run_loop
 from .config import Config, app_dir
 from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS, OIL_ROUTING_SYMBOLS
 from .notifier import notify
@@ -330,8 +330,15 @@ def _show_text_window(title: str, text: str, theme_mode: str) -> None:
 
 
 class TrayController:
-    def __init__(self, config: Config):
+    def __init__(
+        self,
+        config: Config,
+        monitor_loop: Callable[..., Awaitable[None]],
+        log_path: Path,
+    ):
         self.config = config
+        self._monitor_loop = monitor_loop
+        self._log_path = log_path
         self._native_menu_theme = configure_windows_native_menu_theme(config.theme_mode)
         logging.info("Windows native tray menu theme: %s", self._native_menu_theme)
         self.stop_event = threading.Event()
@@ -423,7 +430,7 @@ class TrayController:
         store = StateStore()
         try:
             asyncio.run(
-                run_loop(
+                self._monitor_loop(
                     self.config,
                     store,
                     stop_event=self.stop_event,
@@ -538,12 +545,16 @@ class TrayController:
         if os.name == "nt":
             os.startfile(app_dir())  # type: ignore[attr-defined]
         else:
-            logging.info("Logg: %s", LOG_PATH)
+            logging.info("Logg: %s", self._log_path)
 
     def _exit(self, icon, _item) -> None:
         self.stop_event.set()
         icon.stop()
 
 
-def run_tray(config: Config) -> None:
-    TrayController(config).run()
+def run_tray(
+    config: Config,
+    monitor_loop: Callable[..., Awaitable[None]],
+    log_path: Path,
+) -> None:
+    TrayController(config, monitor_loop, log_path).run()
