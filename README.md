@@ -95,9 +95,13 @@ Windows MessageBox. Texten är markerbar, stöder **Ctrl+A/Ctrl+C**, har **Kopie
 Segoe UI-baserad typografi. På Windows konfigurerar processen **Per-Monitor DPI Awareness V2 innan någon UI
 skapas**, med äldre DPI-API:er som fallback. Det förhindrar att Windows bitmap-skalar tray/Tk-innehåll på
 hög-DPI-skärmar, vilket annars kan göra texten synligt suddig. Tray-menyn har även **Tema → Följ Windows / Ljust / Mörkt**. Standard är
-`system`, vilket läser Windows `AppsUseLightTheme` varje gång ett informationsfönster öppnas. Ett explicit
-ljus- eller mörkerläge sparas lokalt i `%LOCALAPPDATA%\TradeAlert\config.json`. Befintliga config-filer
-utan `theme_mode` fortsätter automatiskt med systemläget.
+`system`, vilket läser Windows `AppsUseLightTheme` för informationsfönstren och sätter Win32-menyn till
+`AllowDark`. **Mörkt** använder native `ForceDark` och **Ljust** `ForceLight`; Windows menytema flushas
+och pystray-menyn byggs om efter ändring. Därmed följer även själva högerklicksmenyn valt tema i stället för
+att alltid vara ljus. Windows exponerar fortfarande den klassiska Win32 dark-menu-opt-in-ytan via privata
+`uxtheme.dll`-ordinals, så implementationen resolvar dem dynamiskt och faller säkert tillbaka om de saknas.
+Ett explicit ljus- eller mörkerläge sparas lokalt i `%LOCALAPPDATA%\TradeAlert\config.json`. Befintliga
+config-filer utan `theme_mode` fortsätter automatiskt med systemläget.
 
 **Testnotis** går genom samma notifieringsbackend som riktiga nyhetsalerts. Windows-notiser skickas via
 `windows-toasts`, inte via en dold PowerShell-process. Om backend-anropet misslyckas visar tray-status
