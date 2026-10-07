@@ -13,6 +13,7 @@ from .mcp_client import MCPToolError
 from .news import Headline, fetch_dtv_news, fetch_official_news, relevance_score
 from .notifier import notify
 from .state import StateStore
+from .windows_ui import configure_windows_dpi_awareness
 
 LOG_PATH = app_dir() / "trade-alert.log"
 
@@ -211,6 +212,8 @@ async def run_loop(
 
 
 def main() -> None:
+    dpi_awareness = configure_windows_dpi_awareness()
+
     parser = argparse.ArgumentParser(description="Local low-latency trade news notifier")
     parser.add_argument("--once", action="store_true", help="Run one acquisition cycle and exit")
     parser.add_argument("--test-notification", action="store_true", help="Show a Windows test notification and exit")
@@ -219,6 +222,8 @@ def main() -> None:
     args = parser.parse_args()
 
     _setup_logging(args.verbose)
+    if os.name == "nt":
+        logging.info("Windows DPI awareness: %s", dpi_awareness)
     config = Config.load()
     if args.test_notification:
         if not notify("Trade Alert", "Testnotis fungerar."):
