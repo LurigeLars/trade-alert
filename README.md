@@ -1,7 +1,7 @@
 # Trade Alert
 
-Trade Alert är en liten lokal Windows-worker för **latenskänslig nyhetsbevakning av en aktiv trade**.
-Den skickar Windows-notiser men kan inte lägga, ändra eller ta bort ordrar.
+Trade Alert är en liten lokal Windows tray-app för **latenskänslig nyhetsbevakning av en aktiv trade**.
+Den ligger i notification area bredvid klockan, skickar Windows-notiser och kan inte lägga, ändra eller ta bort ordrar.
 
 ## Varför eget repo?
 
@@ -48,9 +48,9 @@ i stället för att försöka köra en ofullständig ZIP-extraktion.
 
 ```powershell
 cd C:\path\to\trade-alert
-uv run --python 3.12 --with mcp==2.2.0 python -m unittest discover -s tests -p "test_*.py"
-uv run --python 3.12 --with mcp==2.2.0 python -m trade_alert --test-notification
-uv run --python 3.12 --with mcp==2.2.0 python -m trade_alert --once
+uv run --python 3.12 python -m unittest discover -s tests -p "test_*.py"
+uv run --python 3.12 python -m trade_alert --test-notification
+uv run --python 3.12 python -m trade_alert --once
 ```
 
 Första körningen skapar `%LOCALAPPDATA%\TradeAlert\config.json` och `%LOCALAPPDATA%\TradeAlert\state.db`.
@@ -63,11 +63,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows-startup.ps1
 ```
 
 Installationen använder den inloggade användarens Windows Startup-mapp och kräver därför **inte**
-administratörsrättigheter. Den startar Trade Alert direkt och vid framtida Windows-inloggningar.
-`install-windows-task.ps1` finns kvar som kompatibilitetswrapper och anropar samma per-user-installer.
+administratörsrättigheter. Startup-genvägen pekar direkt på `.venv\Scripts\pythonw.exe`, så normal
+drift har **inget PowerShell- eller konsolfönster**. `install-windows-task.ps1` finns kvar som
+kompatibilitetswrapper och anropar samma per-user-installer.
 
-Runnern startar om workern efter fem sekunder om processen kraschar med en felkod. Ingen broker-write
-eller elevated process introduceras.
+När appen körs syns Trade Alert i Windows notification area (ibland under pilen `^` om Windows inte
+har pinnat ikonen). Menyn visar aktuell källstatus och har **Pausa/Återuppta**, **Testnotis**,
+**Öppna loggmapp** och **Avsluta Trade Alert**.
+
+Ingen broker-write eller elevated process introduceras.
 
 Avinstallation:
 
