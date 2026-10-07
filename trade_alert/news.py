@@ -15,6 +15,7 @@ CORE_TERM_LABELS = (
     "oil", "crude", "brent", "wti", "opec", "petroleum", "barrel",
     "refiner", "refinery", "gasoline", "diesel", "fuel",
 )
+STANDALONE_HIGH_IMPACT_TERM_LABELS = ("hormuz",)
 IMPACT_TERM_LABELS = (
     "iran", "hormuz", "saudi", "russia", "sanction", "pipeline", "tanker",
     "inventory", "inventories", "eia", "iea", "production", "output", "supply",
@@ -28,6 +29,10 @@ CORE_TERMS = re.compile(
 )
 IMPACT_TERMS = re.compile(
     r"\b(?:" + "|".join(re.escape(term) for term in IMPACT_TERM_LABELS) + r")\b",
+    re.IGNORECASE,
+)
+STANDALONE_HIGH_IMPACT_TERMS = re.compile(
+    r"\b(?:" + "|".join(re.escape(term) for term in STANDALONE_HIGH_IMPACT_TERM_LABELS) + r")\b",
     re.IGNORECASE,
 )
 
@@ -212,12 +217,15 @@ def relevance_score(item: Headline) -> int:
     """
     core = bool(CORE_TERMS.search(item.title))
     impact = bool(IMPACT_TERMS.search(item.title))
+    standalone_high_impact = bool(STANDALONE_HIGH_IMPACT_TERMS.search(item.title))
     routed = bool(OIL_ROUTING_SYMBOLS.intersection(item.related_symbols))
 
     score = 0
     if core:
         score += 2
-    if impact and (core or routed):
+    if standalone_high_impact:
+        score += 4
+    elif impact and (core or routed):
         score += 2
     if routed:
         score += 1
