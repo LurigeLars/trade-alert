@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import logging
 import os
 
 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
@@ -32,7 +33,7 @@ def configure_windows_dpi_awareness() -> str:
             if ctypes.get_last_error() == ERROR_ACCESS_DENIED:
                 return "already-set"
     except (AttributeError, OSError):
-        pass
+        logging.debug("Windows DPI API unavailable; trying fallback", exc_info=True)
 
     try:
         shcore = ctypes.WinDLL("shcore", use_last_error=True)
@@ -46,7 +47,7 @@ def configure_windows_dpi_awareness() -> str:
             if result == E_ACCESSDENIED:
                 return "already-set"
     except (AttributeError, OSError):
-        pass
+        logging.debug("Windows DPI API unavailable; trying fallback", exc_info=True)
 
     try:
         user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -59,7 +60,7 @@ def configure_windows_dpi_awareness() -> str:
             if ctypes.get_last_error() == ERROR_ACCESS_DENIED:
                 return "already-set"
     except (AttributeError, OSError):
-        pass
+        logging.debug("Windows DPI API unavailable; trying fallback", exc_info=True)
 
     return "unavailable"
 

@@ -307,7 +307,7 @@ def main() -> None:
 
     if os.name == "nt" and not args.no_tray:
         from .tray import run_tray
-        run_tray(config)
+        run_tray(config, run_loop, LOG_PATH)
     else:
         foreground_store = StateStore()
         try:
