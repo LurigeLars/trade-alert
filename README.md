@@ -194,6 +194,14 @@ The public-repository policy keeps `main` PR-only with zero mandatory approvals 
 
 No CODEOWNERS or mandatory review ceremony is required.
 
+Repository owners can apply or repair the GitHub-side baseline with the idempotent maintenance script below. It requires an authenticated GitHub CLI session with repository administration permission; no token is stored by the script.
+
+```powershell
+.\\scripts\\configure-github-repo.ps1
+```
+
+The script enables the reviewed security settings, creates or updates the default-branch ruleset, and deletes only stale branches that can be proven to belong to a merged PR into the current default branch. Open or unmerged branches are left untouched.
+
 ## Independence and data limitations
 
 Trade Alert is an independent project and is not affiliated with TradingView, Avanza, Microsoft, Yahoo, or the publishers surfaced by upstream news feeds.
