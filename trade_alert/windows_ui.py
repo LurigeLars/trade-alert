@@ -62,3 +62,145 @@ def configure_windows_dpi_awareness() -> str:
         pass
 
     return "unavailable"
+
+
+WINDOWS_10_1903_BUILD = 18362
+PREFERRED_APP_MODE_ALLOW_DARK = 1
+PREFERRED_APP_MODE_FORCE_DARK = 2
+PREFERRED_APP_MODE_FORCE_LIGHT = 3
+
+
+def preferred_app_mode(theme_mode: str) -> int:
+    """Map Trade Alert theme modes to the Win32 PreferredAppMode enum."""
+    if theme_mode == "system":
+        return PREFERRED_APP_MODE_ALLOW_DARK
+    if theme_mode == "dark":
+        return PREFERRED_APP_MODE_FORCE_DARK
+    if theme_mode == "light":
+        return PREFERRED_APP_MODE_FORCE_LIGHT
+    raise ValueError("theme_mode must be system, light or dark")
+
+
+def _windows_build_number() -> int:
+    if os.name != "nt":
+        return 0
+    try:
+        import sys
+
+        return int(sys.getwindowsversion().build)
+    except (AttributeError, TypeError, ValueError):
+        return 0
+
+
+def _uxtheme_ordinal(ordinal: int, restype, argtypes):
+    """Resolve one private uxtheme export by ordinal.
+
+    Windows still exposes its classic Win32 dark-menu opt-in only through
+    private uxtheme exports. Resolve them dynamically and fail closed if the
+    host build changes rather than binding them at import time.
+    """
+    if os.name != "nt":
+        return None
+
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+        kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+        kernel32.LoadLibraryW.argtypes = [ctypes.c_wchar_p]
+        kernel32.LoadLibraryW.restype = ctypes.c_void_p
+        kernel32.GetProcAddress.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        kernel32.GetProcAddress.restype = ctypes.c_void_p
+
+        module = kernel32.GetModuleHandleW("uxtheme.dll")
+        if not module:
+            module = kernel32.LoadLibraryW("uxtheme.dll")
+        if not module:
+            return None
+
+        address = kernel32.GetProcAddress(module, ctypes.c_void_p(ordinal))
+        if not address:
+            return None
+
+        prototype = ctypes.WINFUNCTYPE(restype, *argtypes)
+        return prototype(address)
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
+
+
+def flush_windows_menu_themes() -> bool:
+    """Refresh cached native menu visuals after a preferred app-mode change."""
+    if os.name != "nt" or _windows_build_number() < WINDOWS_10_1903_BUILD:
+        return False
+
+    flush = _uxtheme_ordinal(136, None, ())
+    if flush is None:
+        return False
+    try:
+        flush()
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def configure_windows_native_menu_theme(theme_mode: str) -> str:
+    """Apply Trade Alert's theme choice to native Win32 popup menus.
+
+    system -> AllowDark (Windows decides)
+    dark   -> ForceDark
+    light  -> ForceLight
+
+    The required Win32 menu dark-mode surface is private/ordinal-based on
+    Windows 10/11. If it is unavailable, this function returns a status rather
+    than breaking the tray app.
+    """
+    mode = preferred_app_mode(theme_mode)
+    if os.name != "nt":
+        return "not-windows"
+    if _windows_build_number() < WINDOWS_10_1903_BUILD:
+        return "unsupported"
+
+    set_preferred = _uxtheme_ordinal(135, ctypes.c_int, (ctypes.c_int,))
+    if set_preferred is None:
+        return "unavailable"
+
+    refresh_policy = _uxtheme_ordinal(104, None, ())
+    try:
+        if refresh_policy is not None:
+            refresh_policy()
+        set_preferred(mode)
+        flushed = flush_windows_menu_themes()
+    except (OSError, ValueError):
+        return "unavailable"
+
+    label = {
+        PREFERRED_APP_MODE_ALLOW_DARK: "allow-dark",
+        PREFERRED_APP_MODE_FORCE_DARK: "force-dark",
+        PREFERRED_APP_MODE_FORCE_LIGHT: "force-light",
+    }[mode]
+    return label if flushed else f"{label}-no-flush"
+
+
+def allow_windows_dark_mode_for_window(hwnd: int | None, theme_mode: str) -> bool:
+    """Opt a pystray owner window into dark control theming when supported."""
+    if (
+        os.name != "nt"
+        or not hwnd
+        or _windows_build_number() < WINDOWS_10_1903_BUILD
+    ):
+        return False
+
+    allow_dark = _uxtheme_ordinal(
+        133,
+        ctypes.c_bool,
+        (ctypes.c_void_p, ctypes.c_bool),
+    )
+    if allow_dark is None:
+        return False
+
+    # AllowDarkModeForWindow is an opt-in. ForceLight explicitly disables it;
+    # system/dark keep the window eligible and process PreferredAppMode decides.
+    enabled = theme_mode != "light"
+    try:
+        return bool(allow_dark(ctypes.c_void_p(int(hwnd)), enabled))
+    except (OSError, TypeError, ValueError):
+        return False
