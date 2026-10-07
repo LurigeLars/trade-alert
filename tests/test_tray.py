@@ -25,7 +25,7 @@ class TrayTests(unittest.TestCase):
 
     def test_monitoring_summary_exposes_effective_configuration(self):
         config = Config(
-            profile_name="BULL OLJA X16 AVA 2 / Brent",
+            profile_name="Oil / Brent",
             official_symbols=("ICEEUR:BRN1!",),
             dtv_watchlist_id=None,
             poll_seconds=20,
@@ -33,7 +33,7 @@ class TrayTests(unittest.TestCase):
             notification_min_score=2,
         )
         summary = monitoring_summary(config)
-        self.assertIn("BULL OLJA X16 AVA 2 / Brent", summary)
+        self.assertIn("Oil / Brent", summary)
         self.assertIn("ICEEUR:BRN1!", summary)
         self.assertIn("PRIMÄR", summary)
         self.assertIn("auto-upptäcker", summary)

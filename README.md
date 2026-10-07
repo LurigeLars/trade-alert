@@ -1,140 +1,205 @@
 # Trade Alert
 
-Trade Alert är en liten lokal Windows tray-app för **latenskänslig nyhetsbevakning av en aktiv trade**.
-Den ligger i notification area bredvid klockan, skickar Windows-notiser och kan inte lägga, ändra eller ta bort ordrar.
+[![Tests](https://github.com/LurigeLars/trade-alert/actions/workflows/tests.yml/badge.svg)](https://github.com/LurigeLars/trade-alert/actions/workflows/tests.yml)
+[![Static analysis](https://github.com/LurigeLars/trade-alert/actions/workflows/static-analysis.yml/badge.svg)](https://github.com/LurigeLars/trade-alert/actions/workflows/static-analysis.yml)
+[![CodeQL](https://github.com/LurigeLars/trade-alert/actions/workflows/codeql.yml/badge.svg)](https://github.com/LurigeLars/trade-alert/actions/workflows/codeql.yml)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## Varför eget repo?
+Trade Alert is a small Windows tray application for **low-latency market-news alerts around an active trade context**.
 
-Trade Spine är kontrollplan och durable state. Trade Alert har en annan livscykel: den kör kontinuerligt,
-pollar/streamar nyheter tätt och visar lokala notifieringar. Att hålla den separat minskar beroenden och
-hindrar UI/Windows-fel från att påverka Trade Spine.
+It continuously reads bounded news feeds, applies deterministic relevance rules, shows Windows notifications, and keeps an unread local alert history so a missed toast is still visible later.
+
+It is deliberately **not** an execution system. It has no broker login, order placement, order modification, or order-cancellation capability.
+
+## Current deployment and security posture
+
+- local Windows tray process, started per-user with `pythonw.exe`;
+- no PowerShell or console window during normal operation;
+- TradingView Desktop News Flow is the primary broad discovery source;
+- ticker-specific Official TradingView news is targeted corroboration/fallback through Trade Spine;
+- no LLM is used in the hot notification path;
+- user-specific watchlist IDs are discovered/pinned only in local state and are not committed;
+- credentials, OAuth material, account identifiers, machine-specific paths and personal position state do not belong in Git;
+- external headlines/provider payloads are untrusted data, never instructions;
+- the project is notifier-only and cannot execute trades.
+
+## Why this project exists
+
+A slower portfolio process can be appropriate for thesis review and broad opportunity discovery, but it is not ideal for a live trade where a material headline should surface within seconds.
+
+Trade Alert fills that narrower gap:
 
 ```text
-DTV TradingView News Flow (primär broad discovery, max 200)
-               \
-                -> Trade Alert -> deterministic oil relevance -> Windows toast
-               /
-Official TradingView symbol-news via Trade Spine (targeted corroboration/fallback)
+TradingView Desktop News Flow
+       |  primary broad discovery
+       v
+Trade Alert
+       |
+       +--> deterministic oil/news relevance
+       +--> dedupe + local unread history
+       +--> Windows toast
+       |
+       +--> Official TradingView via Trade Spine
+            targeted corroboration / fallback
 ```
 
-### Gränser
+Keeping this in a separate repository also isolates desktop UI, Windows lifecycle and notification failures from Trade Spine's durable portfolio/thesis state.
 
-- **Trade Spine:** portfölj, teser, verifierade underliggande, beslut och Official TradingView OAuth.
-- **Trade Alert:** pollingintervall, kortlivad source cursor, headline-dedupe och notifieringar.
-- **Ingen execution:** Trade Alert har inga broker-write-verktyg.
+## News routing
 
-## Nuvarande oil-profil
+The default example profile is a generic **Oil / Brent** context.
 
-Standardprofilen heter `BULL OLJA X16 AVA 2 / Brent`.
+Primary source:
 
-**Primär discovery är TradingView Desktop News Flow**, i linje med Trade Spines källpolicy efter den
-praktiska källutvärderingen. En kontrakt-/ticker-specifik Brent-feed kan vara glest taggad och används
-därför inte som primär discovery. Official TradingView `ICEEUR:BRN1!` finns kvar som verifierad
-**targeted corroboration/fallback**, inte som huvudflöde.
+- DTV TradingView News Flow;
+- polled every 20 seconds by default;
+- up to 200 headlines per fetch;
+- active TradingView watchlist is auto-resolved when no explicit local watchlist ID is configured;
+- auto-resolution requires a verified oil routing anchor before the numeric ID is accepted.
 
-Om `dtv_watchlist_id` är `null` använder Trade Alert inte längre symbol-news som normal primärväg.
-Den läser i stället den aktiva TradingView-watchlisten via `watchlist_get`, kräver minst ett verifierat
-oljeankare (Brent/WTI/refined-product routing symbol), och sparar det upplösta numeriska ID:t endast
-lokalt i SQLite. Därmed kan broad News Flow användas utan att ett användarspecifikt watchlist-ID
-committas till repot. Ett explicit lokalt `dtv_watchlist_id` kan fortfarande pinna en bestämd lista.
+Secondary source:
 
-## Installation / test
+- Official TradingView symbol news through Trade Spine;
+- default corroboration symbol: `ICEEUR:BRN1!`;
+- polled every 30 seconds by default;
+- up to 25 headlines per symbol.
 
-Krav: Windows, Python 3.12 via `uv`, lokal Trade Spine HTTP-runtime på `127.0.0.1:8773`. MCP Python SDK är pinnad och testad via `pyproject.toml`.
+The source split is intentional. Broad News Flow is used for discovery because commodity contract/ticker news feeds can be sparsely tagged. Ticker-specific news remains useful as corroboration and fallback.
 
-För en ny lokal checkout:
+## Deterministic relevance
+
+Broad feeds need a stricter filter than symbol-specific feeds. Trade Alert therefore uses a small reproducible score instead of an LLM in the hot path.
+
+The current oil profile uses these principles:
+
+- explicit oil/core term in the headline: +2;
+- geopolitical/supply impact term: +2 **only when oil context already exists**;
+- provider-related oil symbol: +1 routing evidence;
+- TradingView `urgency=1`: +1 only when oil context exists;
+- a related symbol by itself cannot reach the alert threshold.
+
+This avoids obvious false positives such as unrelated headlines containing generic words like `deal` or `increase`.
+
+On the first News Flow activation, older headlines are baselined so an upgrade does not produce a burst of stale notifications.
+
+## Tray UI
+
+The tray menu exposes:
+
+- current source health;
+- **Latest alerts** / unread count;
+- **What is monitored?** for the effective routing/profile configuration;
+- pause/resume;
+- test notification;
+- log-folder shortcut;
+- light/dark/system theme;
+- exit.
+
+Unread real alerts are stored in local SQLite. The tray icon keeps a persistent unread badge until the displayed alerts are marked read.
+
+The information windows support selection, `Ctrl+A`, `Ctrl+C`, **Copy all**, scrolling, system-aware light/dark mode, and Per-Monitor DPI Awareness V2 on Windows.
+
+## Quick start
+
+### Requirements
+
+- Windows 10/11;
+- Python 3.12+;
+- [uv](https://docs.astral.sh/uv/);
+- TradingView Desktop MCP for the primary News Flow path;
+- Trade Spine only for the Official TradingView corroboration/fallback path.
+
+Clone and install:
 
 ```powershell
-Set-Location C:\ClaudeCode
 git clone https://github.com/LurigeLars/trade-alert.git
 Set-Location .\trade-alert
+
+uv venv --python 3.12 .venv
+uv pip install --python .\.venv\Scripts\python.exe --editable .
 ```
 
-Om katalogen redan finns men saknar `trade_alert\__main__.py`, byt namn på den gamla katalogen och klona om
-i stället för att försöka köra en ofullständig ZIP-extraktion.
+Smoke tests:
 
 ```powershell
-cd C:\path\to\trade-alert
 uv run --python 3.12 python -m unittest discover -s tests -p "test_*.py"
 uv run --python 3.12 python -m trade_alert --test-notification
 uv run --python 3.12 python -m trade_alert --once
 ```
 
-Första körningen skapar `%LOCALAPPDATA%\TradeAlert\config.json` och `%LOCALAPPDATA%\TradeAlert\state.db`.
-Gamla headlines baselinas på första körningen; endast mycket färska headlines kan notifiera direkt.
-
-När engångstestet ser bra ut:
+Install the per-user tray startup:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows-startup.ps1
 ```
 
-Installationen använder den inloggade användarens Windows Startup-mapp och kräver därför **inte**
-administratörsrättigheter. Installern använder `uv venv` + `uv pip install` i `.venv` och lämnar
-inga genererade dependency-filer i Git-checkouten, så Docker-MCP:s clean-repo-skydd kan förbli aktiverat. Startup-genvägen pekar direkt på `.venv\Scripts\pythonw.exe`, så normal
-drift har **inget PowerShell- eller konsolfönster**. `install-windows-task.ps1` finns kvar som
-kompatibilitetswrapper och anropar samma per-user-installer.
+The startup shortcut points directly to `.venv\Scripts\pythonw.exe`, so normal operation does not leave a terminal window open.
 
-När appen körs syns Trade Alert i Windows notification area (ibland under pilen `^` om Windows inte
-har pinnat ikonen). Menyn visar aktuell källstatus och har bland annat **Senaste alerts**,
-**Vad bevakas?**, **Pausa/Återuppta**, **Testnotis**, **Öppna loggmapp** och **Avsluta Trade Alert**.
+## Configuration and local state
 
-Riktiga alerts sparas lokalt i SQLite med unread-status. Om en toast missas ligger därför en persistent
-röd badge kvar på tray-ikonen och tooltip/meny visar antalet olästa alerts. **Senaste alerts** visar de
-senaste 10 signalerna med full rubrik, provider, källa, publiceringstid, relevanspoäng och länk när sådan
-finns. Endast de alerts som faktiskt visas markeras lästa; en ny alert som kommer samtidigt behåller sin
-unread-status.
+On first run Trade Alert creates local state under:
 
-**Vad bevakas?** visar den effektiva routingmodellen direkt i UI:t: DTV News Flow som primär broad discovery,
-lokalt auto-pinnad watchlist när sådan har upplösts, Official TradingView som targeted corroboration,
-separata polling/limit-värden och de deterministiska scoringreglerna. Det kräver inte att användaren
-öppnar loggfilen.
-
-Informationsfönstren för **Vad bevakas?** och **Senaste alerts** använder ett eget läsfönster i stället för
-Windows MessageBox. Texten är markerbar, stöder **Ctrl+A/Ctrl+C**, har **Kopiera allt**, scrollbar och
-Segoe UI-baserad typografi. På Windows konfigurerar processen **Per-Monitor DPI Awareness V2 innan någon UI
-skapas**, med äldre DPI-API:er som fallback. Det förhindrar att Windows bitmap-skalar tray/Tk-innehåll på
-hög-DPI-skärmar, vilket annars kan göra texten synligt suddig. Tray-menyn har även **Tema → Följ Windows / Ljust / Mörkt**. Standard är
-`system`, vilket läser Windows `AppsUseLightTheme` för informationsfönstren och sätter Win32-menyn till
-`AllowDark`. **Mörkt** använder native `ForceDark` och **Ljust** `ForceLight`; Windows menytema flushas
-och pystray-menyn byggs om efter ändring. Därmed följer även själva högerklicksmenyn valt tema i stället för
-att alltid vara ljus. Windows exponerar fortfarande den klassiska Win32 dark-menu-opt-in-ytan via privata
-`uxtheme.dll`-ordinals, så implementationen resolvar dem dynamiskt och faller säkert tillbaka om de saknas.
-Ett explicit ljus- eller mörkerläge sparas lokalt i `%LOCALAPPDATA%\TradeAlert\config.json`. Befintliga
-config-filer utan `theme_mode` fortsätter automatiskt med systemläget.
-
-**Testnotis** går genom samma notifieringsbackend som riktiga nyhetsalerts. Windows-notiser skickas via
-`windows-toasts`, inte via en dold PowerShell-process. Om backend-anropet misslyckas visar tray-status
-`Notisfel · se logg` och felet skrivs till `%LOCALAPPDATA%\TradeAlert\trade-alert.log`.
-
-Ingen broker-write eller elevated process introduceras.
-
-Avinstallation:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-windows-startup.ps1
+```text
+%LOCALAPPDATA%\TradeAlert
 ```
 
-## Relevansfilter
+The Git-tracked `config.example.json` documents the available settings. Local configuration contains operational preferences only and must not be used to commit credentials or personal position state.
 
-Broad News Flow kräver hårdare routing än symbol-news. V0.1 använder därför deterministisk ranking utan
-LLM i hot path:
+Important settings include:
 
-- explicit olje/core-term i rubriken ger +2;
-- impact-termer som Iran/Hormuz/supply/tanker ger +2 **endast när oljecontext redan finns**;
-- en provider-relaterad Brent/WTI/refined-product-symbol ger +1 som routing evidence;
-- `urgency=1` ger +1 endast i oljecontext;
-- en relaterad symbol ensam kan aldrig nå alerttröskeln.
+| Setting | Purpose |
+|---|---|
+| `profile_name` | Human-readable local monitoring label |
+| `theme_mode` | `system`, `light`, or `dark` |
+| `dtv_watchlist_id` | Optional explicit numeric TradingView watchlist ID; otherwise auto-resolved locally |
+| `official_symbols` | Targeted Official TradingView corroboration symbols |
+| `poll_seconds` | Primary News Flow cadence |
+| `official_poll_seconds` | Corroboration cadence |
+| `dtv_max_headlines` | Broad News Flow fetch bound |
+| `official_max_headlines` | Per-symbol corroboration bound |
+| `notification_min_score` | Deterministic alert threshold |
 
-Det förhindrar att generiska broad-feed-rubriker med ord som `deal` eller `increase` blir falska
-oljealerts, samtidigt som exempelvis en Iran/Hormuz-rubrik med olje-routing kan passera även om ordet
-`oil` saknas i själva rubriken.
+Local SQLite stores seen-headline dedupe, source cursors, locally resolved watchlist metadata and unread alert history.
 
-Första gången broad News Flow aktiveras baselinas gamla artiklar; bara mycket färska artiklar får notifiera
-direkt. Därefter används source cursor och headline-dedupe.
+## Security model
 
-## Lokal state och privacy
+Trade Alert intentionally keeps a narrow capability boundary:
 
-Personlig konfiguration, source cursors och dedupe-databasen ligger utanför repot under
-`%LOCALAPPDATA%\TradeAlert`. OAuth ligger fortsatt hos Trade Spine. Inga kontonummer, brokerdata eller tokens
-ska committas.
+- no brokerage authentication;
+- no account or portfolio API;
+- no order execution;
+- no arbitrary shell exposed to the application;
+- no committed OAuth material or credentials;
+- no personal position state in repository fixtures/defaults;
+- no trust in headline text as instructions;
+- verified provider identifiers before live use.
+
+The Windows host-maintenance path used in the local development stack is separately allowlisted; it is not part of the Trade Alert application API.
+
+For vulnerability reporting, see [SECURITY.md](SECURITY.md).
+
+## Development and repository policy
+
+The repository runs:
+
+- tests on Python 3.12 and 3.13;
+- PowerShell syntax checks;
+- actionlint and immutable GitHub Action pin enforcement;
+- PSScriptAnalyzer;
+- exact runtime dependency-pin policy;
+- CodeQL;
+- Dependabot for Python dependencies and GitHub Actions.
+
+The public-repository policy keeps `main` PR-only with zero mandatory approvals for a single-maintainer repository, strict/up-to-date required checks, no force-push or default-branch deletion, and CodeQL thresholds that block quality errors and High/Critical security findings.
+
+No CODEOWNERS or mandatory review ceremony is required.
+
+## Independence and data limitations
+
+Trade Alert is an independent project and is not affiliated with TradingView, Avanza, Microsoft, Yahoo, or the publishers surfaced by upstream news feeds.
+
+News availability, tagging, timestamps and latency are controlled by upstream providers. A notification is discovery evidence, not an execution instruction or a guarantee that a market claim is correct.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

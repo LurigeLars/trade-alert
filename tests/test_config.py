@@ -13,7 +13,7 @@ class ConfigTests(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "profile_name": "BULL OLJA X16 AVA 2 / Brent",
+                        "profile_name": "Oil / Brent",
                         "official_symbols": ["ICEEUR:BRN1!"],
                     }
                 ),
@@ -28,7 +28,7 @@ class ConfigTests(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "profile_name": "BULL OLJA X16 AVA 2 / Brent",
+                        "profile_name": "Oil / Brent",
                         "official_symbols": ["ICEEUR:BRN1!"],
                         "max_headlines": 25,
                     }
