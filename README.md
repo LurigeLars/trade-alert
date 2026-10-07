@@ -85,7 +85,9 @@ inte att användaren öppnar loggfilen.
 
 Informationsfönstren för **Vad bevakas?** och **Senaste alerts** använder ett eget läsfönster i stället för
 Windows MessageBox. Texten är markerbar, stöder **Ctrl+A/Ctrl+C**, har **Kopiera allt**, scrollbar och
-Segoe UI-baserad typografi. Tray-menyn har även **Tema → Följ Windows / Ljust / Mörkt**. Standard är
+Segoe UI-baserad typografi. På Windows konfigurerar processen **Per-Monitor DPI Awareness V2 innan någon UI
+skapas**, med äldre DPI-API:er som fallback. Det förhindrar att Windows bitmap-skalar tray/Tk-innehåll på
+hög-DPI-skärmar, vilket annars kan göra texten synligt suddig. Tray-menyn har även **Tema → Följ Windows / Ljust / Mörkt**. Standard är
 `system`, vilket läser Windows `AppsUseLightTheme` varje gång ett informationsfönster öppnas. Ett explicit
 ljus- eller mörkerläge sparas lokalt i `%LOCALAPPDATA%\TradeAlert\config.json`. Befintliga config-filer
 utan `theme_mode` fortsätter automatiskt med systemläget.
