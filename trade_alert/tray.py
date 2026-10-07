@@ -333,6 +333,7 @@ class TrayController:
     def __init__(self, config: Config):
         self.config = config
         self._native_menu_theme = configure_windows_native_menu_theme(config.theme_mode)
+        logging.info("Windows native tray menu theme: %s", self._native_menu_theme)
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self._status = "Startar…"
