@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a reproducible Trade Alert defect
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Remove credentials, account identifiers, personal
+        position details and machine-specific secrets from logs before posting them.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Commit SHA or the latest main revision you tested.
+      placeholder: e.g. 0123456789abcdef
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: e.g. Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Give the smallest reliable sequence that reproduces the problem.
+      placeholder: |
+        1. Start Trade Alert
+        2. ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste only the relevant excerpt after redacting credentials, identifiers and personal data.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I tested the latest main branch or current release.
+          required: true
+        - label: I removed secrets, account identifiers and personal position data.
+          required: true
