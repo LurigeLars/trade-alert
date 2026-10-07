@@ -1,5 +1,6 @@
 {
   "profile_name": "BULL OLJA X16 AVA 2 / Brent",
+  "theme_mode": "system",
   "dtv_url": "http://127.0.0.1:8765/mcp",
   "trade_spine_url": "http://127.0.0.1:8773/mcp",
   "dtv_watchlist_id": null,
