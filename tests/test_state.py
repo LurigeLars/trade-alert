@@ -17,6 +17,53 @@ class StateTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_alert_history_persists_unread_and_marks_only_selected_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            try:
+                self.assertTrue(
+                    store.record_alert(
+                        item_key="a",
+                        source="TV:ICEEUR:BRN1!",
+                        provider="Reuters",
+                        headline="Oil supply headline",
+                        body="body a",
+                        score=4,
+                        published=100.0,
+                        link="https://example.test/a",
+                        at=200.0,
+                    )
+                )
+                self.assertTrue(
+                    store.record_alert(
+                        item_key="b",
+                        source="TV:ICEEUR:BRN1!",
+                        provider="Reuters",
+                        headline="Second headline",
+                        body="body b",
+                        score=2,
+                        at=201.0,
+                    )
+                )
+                self.assertFalse(
+                    store.record_alert(
+                        item_key="a",
+                        source="TV:ICEEUR:BRN1!",
+                        headline="duplicate",
+                        body="duplicate",
+                        score=2,
+                    )
+                )
+                self.assertEqual(2, store.unread_alert_count())
+                rows = store.recent_alerts(limit=10)
+                self.assertEqual(["b", "a"], [row.item_key for row in rows])
+
+                store.mark_alerts_read(["a"])
+                self.assertEqual(1, store.unread_alert_count())
+                self.assertTrue(store.recent_alerts(limit=1)[0].unread)
+            finally:
+                store.close()
+
 
 if __name__ == "__main__":
     unittest.main()
