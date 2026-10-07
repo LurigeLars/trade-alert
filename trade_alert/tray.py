@@ -13,21 +13,11 @@ from PIL import Image, ImageDraw
 
 from .app import LOG_PATH, run_loop
 from .config import Config, app_dir
+from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS
 from .notifier import notify
 from .state import AlertRecord, StateStore
 
 Health = Literal["ok", "waiting", "error", "paused"]
-
-CORE_LABELS = (
-    "oil", "crude", "brent", "wti", "opec/opec+", "petroleum", "barrel",
-    "refiner", "refinery", "gasoline", "diesel",
-)
-IMPACT_LABELS = (
-    "iran", "hormuz", "saudi", "russia", "sanction", "pipeline", "tanker",
-    "inventory/inventories", "eia", "iea", "production", "output", "supply",
-    "ceasefire", "israel", "middle east", "attack", "strike", "export", "spr",
-    "disruption", "shutdown", "outage", "quota", "cut/cuts", "increase", "deal",
-)
 
 
 def make_status_icon(health: Health = "waiting", unread: int = 0) -> Image.Image:
@@ -74,8 +64,8 @@ def monitoring_summary(config: Config) -> str:
         f"• max {config.max_headlines} headlines per hämtning\n\n"
         f"Alerttröskel\n"
         f"• relevanspoäng ≥ {config.notification_min_score}\n"
-        f"• +2 om rubriken innehåller core-termer:\n  {', '.join(CORE_LABELS)}\n"
-        f"• +2 om rubriken innehåller impact-termer:\n  {', '.join(IMPACT_LABELS)}\n"
+        f"• +2 om rubriken innehåller core-termer:\n  {', '.join(CORE_TERM_LABELS)}\n"
+        f"• +2 om rubriken innehåller impact-termer:\n  {', '.join(IMPACT_TERM_LABELS)}\n"
         f"• +2 om TradingView urgency = 1\n"
         f"• +2 om relaterad symbol är {related}\n\n"
         f"Första start\n"
