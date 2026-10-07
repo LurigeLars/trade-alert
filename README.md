@@ -25,8 +25,9 @@ Official TradingView via Trade Spine intelligence_state (fallback/komplettering)
 
 ## Nuvarande oil-profil
 
-Standardprofilen använder `ICEEUR:BRN1!` för Official TradingView News. Den symbolen är verifierad mot
-TradingViews nyhetsfeed för Brent och ska inte ersättas av en gissad alias-symbol.
+Standardprofilen heter `Oil / Brent` och använder `ICEEUR:BRN1!` för Official TradingView
+News. Den symbolen är verifierad mot TradingViews nyhetsfeed för Brent och ska inte ersättas av en gissad
+alias-symbol. Profilnamnet kan ändras lokalt i `config.json` utan att ändra source-routing.
 
 DTV News Flow är avsedd som primär snabb feed, men dess verktyg kräver ett numeriskt TradingView-watchlist-ID.
 Om `dtv_watchlist_id` är `null` kör Trade Alert ändå via Official TradingView-fallbacken.
@@ -69,8 +70,18 @@ drift har **inget PowerShell- eller konsolfönster**. `install-windows-task.ps1`
 kompatibilitetswrapper och anropar samma per-user-installer.
 
 När appen körs syns Trade Alert i Windows notification area (ibland under pilen `^` om Windows inte
-har pinnat ikonen). Menyn visar aktuell källstatus och har **Pausa/Återuppta**, **Testnotis**,
-**Öppna loggmapp** och **Avsluta Trade Alert**.
+har pinnat ikonen). Menyn visar aktuell källstatus och har bland annat **Senaste alerts**,
+**Vad bevakas?**, **Pausa/Återuppta**, **Testnotis**, **Öppna loggmapp** och **Avsluta Trade Alert**.
+
+Riktiga alerts sparas lokalt i SQLite med unread-status. Om en toast missas ligger därför en persistent
+röd badge kvar på tray-ikonen och tooltip/meny visar antalet olästa alerts. **Senaste alerts** visar de
+senaste 10 signalerna med full rubrik, provider, källa, publiceringstid, relevanspoäng och länk när sådan
+finns. Endast de alerts som faktiskt visas markeras lästa; en ny alert som kommer samtidigt behåller sin
+unread-status.
+
+**Vad bevakas?** visar den effektiva konfigurationen direkt i UI:t: profilnamn, Official TradingView-symboler,
+DTV-status, pollingintervall, max headlines, alerttröskel och de deterministiska scoringreglerna. Det kräver
+inte att användaren öppnar loggfilen.
 
 **Testnotis** går genom samma notifieringsbackend som riktiga nyhetsalerts. Windows-notiser skickas via
 `windows-toasts`, inte via en dold PowerShell-process. Om backend-anropet misslyckas visar tray-status

@@ -26,6 +26,14 @@ class NewsTests(unittest.TestCase):
         row = normalize_headlines(payload, source="TV")[0]
         self.assertEqual(0, relevance_score(row))
 
+    def test_opec_plus_still_matches_core_term_filter(self):
+        payload = {"headlines": [{
+            "id": "opec", "title": "OPEC+ ministers meet in Vienna",
+            "published": time.time(),
+        }]}
+        row = normalize_headlines(payload, source="TV")[0]
+        self.assertEqual(2, relevance_score(row))
+
     def test_related_brent_symbol_can_make_geopolitical_headline_relevant(self):
         payload = {"headlines": [{
             "id": "x", "title": "Iran says shipping route faces disruption",

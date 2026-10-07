@@ -9,14 +9,23 @@ from datetime import datetime, timezone
 from typing import Any, Iterable
 
 
+CORE_TERM_LABELS = (
+    "oil", "crude", "brent", "wti", "opec", "petroleum", "barrel",
+    "refiner", "refinery", "gasoline", "diesel",
+)
+IMPACT_TERM_LABELS = (
+    "iran", "hormuz", "saudi", "russia", "sanction", "pipeline", "tanker",
+    "inventory", "inventories", "eia", "iea", "production", "output", "supply",
+    "ceasefire", "israel", "middle east", "attack", "strike", "export", "spr",
+    "disruption", "shutdown", "outage", "quota", "cut", "cuts", "increase", "deal",
+)
+
 CORE_TERMS = re.compile(
-    r"\b(oil|crude|brent|wti|opec|opec\+|petroleum|barrel|refiner|refinery|gasoline|diesel)\b",
+    r"\b(?:" + "|".join(re.escape(term) for term in CORE_TERM_LABELS) + r")\b",
     re.IGNORECASE,
 )
 IMPACT_TERMS = re.compile(
-    r"\b(iran|hormuz|saudi|russia|sanction|pipeline|tanker|inventory|inventories|eia|iea|"
-    r"production|output|supply|ceasefire|israel|middle east|attack|strike|export|spr|"
-    r"disruption|shutdown|outage|quota|cut|cuts|increase|deal)\b",
+    r"\b(?:" + "|".join(re.escape(term) for term in IMPACT_TERM_LABELS) + r")\b",
     re.IGNORECASE,
 )
 BRENT_SYMBOLS = {"ICEEUR:BRN1!", "TVC:UKOIL"}
