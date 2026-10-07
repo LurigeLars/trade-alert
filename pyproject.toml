@@ -1,0 +1,18 @@
+[project]
+name = "trade-alert"
+version = "0.1.0"
+description = "Local low-latency trade news notifier backed by TradingView and Trade Spine"
+requires-python = ">=3.12"
+dependencies = [
+  "mcp==2.2.0",
+]
+
+[project.scripts]
+trade-alert = "trade_alert.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["trade_alert"]
