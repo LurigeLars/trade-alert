@@ -193,7 +193,8 @@ def main() -> None:
     _setup_logging(args.verbose)
     config = Config.load()
     if args.test_notification:
-        notify("Trade Alert", "Testnotis fungerar.")
+        if not notify("Trade Alert", "Testnotis fungerar."):
+            raise SystemExit(1)
         return
 
     store = StateStore()
