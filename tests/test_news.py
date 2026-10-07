@@ -28,7 +28,7 @@ class NewsTests(unittest.TestCase):
 
     def test_opec_plus_still_matches_core_term_filter(self):
         payload = {"headlines": [{
-            "id": "opec", "title": "OPEC+ discusses output policy",
+            "id": "opec", "title": "OPEC+ ministers meet in Vienna",
             "published": time.time(),
         }]}
         row = normalize_headlines(payload, source="TV")[0]
