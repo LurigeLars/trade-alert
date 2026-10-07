@@ -83,6 +83,13 @@ unread-status.
 DTV-status, pollingintervall, max headlines, alerttröskel och de deterministiska scoringreglerna. Det kräver
 inte att användaren öppnar loggfilen.
 
+Informationsfönstren för **Vad bevakas?** och **Senaste alerts** använder ett eget läsfönster i stället för
+Windows MessageBox. Texten är markerbar, stöder **Ctrl+A/Ctrl+C**, har **Kopiera allt**, scrollbar och
+Segoe UI-baserad typografi. Tray-menyn har även **Tema → Följ Windows / Ljust / Mörkt**. Standard är
+`system`, vilket läser Windows `AppsUseLightTheme` varje gång ett informationsfönster öppnas. Ett explicit
+ljus- eller mörkerläge sparas lokalt i `%LOCALAPPDATA%\TradeAlert\config.json`. Befintliga config-filer
+utan `theme_mode` fortsätter automatiskt med systemläget.
+
 **Testnotis** går genom samma notifieringsbackend som riktiga nyhetsalerts. Windows-notiser skickas via
 `windows-toasts`, inte via en dold PowerShell-process. Om backend-anropet misslyckas visar tray-status
 `Notisfel · se logg` och felet skrivs till `%LOCALAPPDATA%\TradeAlert\trade-alert.log`.

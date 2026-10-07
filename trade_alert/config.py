@@ -15,6 +15,7 @@ def app_dir() -> Path:
 @dataclass(slots=True)
 class Config:
     profile_name: str = "Oil / Brent"
+    theme_mode: str = "system"
     dtv_url: str = "http://127.0.0.1:8765/mcp"
     trade_spine_url: str = "http://127.0.0.1:8773/mcp"
     dtv_watchlist_id: str | None = None
@@ -42,6 +43,8 @@ class Config:
     def validate(self) -> None:
         if not self.profile_name or len(self.profile_name) > 160:
             raise ValueError("profile_name must be between 1 and 160 characters")
+        if self.theme_mode not in {"system", "light", "dark"}:
+            raise ValueError("theme_mode must be system, light or dark")
         if not 5 <= int(self.poll_seconds) <= 3600:
             raise ValueError("poll_seconds must be between 5 and 3600")
         if not 5 <= int(self.official_poll_seconds) <= 3600:

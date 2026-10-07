@@ -2,7 +2,13 @@ import unittest
 
 from trade_alert.config import Config
 from trade_alert.state import AlertRecord
-from trade_alert.tray import format_alert_history, make_status_icon, monitoring_summary
+from trade_alert.tray import (
+    format_alert_history,
+    make_status_icon,
+    monitoring_summary,
+    resolve_theme,
+    theme_palette,
+)
 
 
 class TrayTests(unittest.TestCase):
@@ -34,6 +40,22 @@ class TrayTests(unittest.TestCase):
         self.assertIn("var 30 s", summary)
         self.assertIn("relevanspoäng ≥ 2", summary)
         self.assertIn("ingen LLM", summary)
+
+    def test_theme_resolution_defaults_system_to_detected_windows_mode(self):
+        self.assertEqual("dark", resolve_theme("system", system_dark=True))
+        self.assertEqual("light", resolve_theme("system", system_dark=False))
+        self.assertEqual("dark", resolve_theme("dark", system_dark=False))
+        self.assertEqual("light", resolve_theme("light", system_dark=True))
+
+    def test_theme_palettes_have_accessible_selection_contrast(self):
+        for theme in ("light", "dark"):
+            palette = theme_palette(theme)
+            self.assertIn("window", palette)
+            self.assertIn("surface", palette)
+            self.assertIn("text", palette)
+            self.assertIn("selection", palette)
+            self.assertNotEqual(palette["surface"], palette["text"])
+            self.assertNotEqual(palette["selection"], palette["selection_text"])
 
     def test_alert_history_keeps_full_headline_and_link(self):
         record = AlertRecord(
