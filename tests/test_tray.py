@@ -35,11 +35,24 @@ class TrayTests(unittest.TestCase):
         summary = monitoring_summary(config)
         self.assertIn("BULL OLJA X16 AVA 2 / Brent", summary)
         self.assertIn("ICEEUR:BRN1!", summary)
-        self.assertIn("INAKTIV", summary)
+        self.assertIn("PRIMÄR", summary)
+        self.assertIn("auto-upptäcker", summary)
         self.assertIn("var 20 s", summary)
+        self.assertIn("max 200 headlines", summary)
         self.assertIn("var 30 s", summary)
+        self.assertIn("targeted corroboration", summary)
+        self.assertIn("routing evidence", summary)
         self.assertIn("relevanspoäng ≥ 2", summary)
         self.assertIn("ingen LLM", summary)
+
+    def test_monitoring_summary_shows_locally_auto_pinned_watchlist_name(self):
+        summary = monitoring_summary(
+            Config(),
+            resolved_watchlist_name="Watchlist",
+            auto_pinned_watchlist=True,
+        )
+        self.assertIn("auto-pinnad lokalt", summary)
+        self.assertIn("Watchlist", summary)
 
     def test_theme_resolution_defaults_system_to_detected_windows_mode(self):
         self.assertEqual("dark", resolve_theme("system", system_dark=True))
