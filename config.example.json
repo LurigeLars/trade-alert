@@ -5,7 +5,8 @@
   "trade_spine_url": "http://127.0.0.1:8773/mcp",
   "dtv_watchlist_id": null,
   "official_symbols": [
-    "ICEEUR:BRN1!"
+    "ICEEUR:BRN1!",
+    "NYMEX:RB1!"
   ],
   "poll_seconds": 20,
   "official_poll_seconds": 30,

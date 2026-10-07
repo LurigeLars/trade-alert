@@ -60,7 +60,7 @@ Primary source:
 Secondary source:
 
 - Official TradingView symbol news through Trade Spine;
-- default corroboration symbol: `ICEEUR:BRN1!`;
+- default corroboration symbols: `ICEEUR:BRN1!` and `NYMEX:RB1!`;
 - polled every 30 seconds by default;
 - up to 25 headlines per symbol.
 
@@ -74,6 +74,7 @@ The current oil profile uses these principles:
 
 - explicit oil/core term in the headline: +2;
 - geopolitical/supply impact term: +2 **only when oil context already exists**;
+- `Hormuz`: +4 even without an explicit oil ticker/core term, because the strait is itself a material oil/product supply route;
 - provider-related oil symbol: +1 routing evidence;
 - TradingView `urgency=1`: +1 only when oil context exists;
 - a related symbol by itself cannot reach the alert threshold.

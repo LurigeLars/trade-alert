@@ -6,6 +6,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
+DEFAULT_OFFICIAL_SYMBOLS = ("ICEEUR:BRN1!", "NYMEX:RB1!")
+
+
 def app_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA")
     root = Path(base) if base else Path.home() / ".local" / "share"
@@ -19,7 +22,7 @@ class Config:
     dtv_url: str = "http://127.0.0.1:8765/mcp"
     trade_spine_url: str = "http://127.0.0.1:8773/mcp"
     dtv_watchlist_id: str | None = None
-    official_symbols: tuple[str, ...] = ("ICEEUR:BRN1!",)
+    official_symbols: tuple[str, ...] = DEFAULT_OFFICIAL_SYMBOLS
     poll_seconds: int = 20
     official_poll_seconds: int = 30
     dtv_max_headlines: int = 200
@@ -46,7 +49,11 @@ class Config:
             raw["official_max_headlines"] = min(int(legacy_max or 25), 100)
             migrated = True
         if "official_symbols" in raw:
-            raw["official_symbols"] = tuple(raw["official_symbols"])
+            symbols = tuple(raw["official_symbols"])
+            if raw.get("profile_name") == "Oil / Brent" and symbols == ("ICEEUR:BRN1!",):
+                symbols = DEFAULT_OFFICIAL_SYMBOLS
+                migrated = True
+            raw["official_symbols"] = symbols
         config = cls(**raw)
         config.validate()
         if migrated:
