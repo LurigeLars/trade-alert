@@ -33,7 +33,7 @@ Om `dtv_watchlist_id` är `null` kör Trade Alert ändå via Official TradingVie
 
 ## Installation / test
 
-Krav: Windows, Python 3.12 via `uv`, lokal Trade Spine HTTP-runtime på `127.0.0.1:8773`.
+Krav: Windows, Python 3.12 via `uv`, lokal Trade Spine HTTP-runtime på `127.0.0.1:8773`. MCP Python SDK är pinnad och testad via `pyproject.toml`.
 
 För en ny lokal checkout:
 
