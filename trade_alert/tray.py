@@ -16,6 +16,11 @@ from .config import Config, app_dir
 from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS, OIL_ROUTING_SYMBOLS
 from .notifier import notify
 from .state import AlertRecord, StateStore
+from .windows_ui import (
+    allow_windows_dark_mode_for_window,
+    configure_windows_native_menu_theme,
+    flush_windows_menu_themes,
+)
 
 Health = Literal["ok", "waiting", "error", "paused"]
 Theme = Literal["light", "dark"]
@@ -327,6 +332,8 @@ def _show_text_window(title: str, text: str, theme_mode: str) -> None:
 class TrayController:
     def __init__(self, config: Config):
         self.config = config
+        self._native_menu_theme = configure_windows_native_menu_theme(config.theme_mode)
+        logging.info("Windows native tray menu theme: %s", self._native_menu_theme)
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self._status = "Startar…"
@@ -382,7 +389,16 @@ class TrayController:
 
     def run(self) -> None:
         self.worker.start()
-        self.icon.run()
+        self.icon.run(setup=self._tray_ready)
+
+    def _tray_ready(self, icon) -> None:
+        for attr in ("_hwnd", "_menu_hwnd"):
+            allow_windows_dark_mode_for_window(
+                getattr(icon, attr, None),
+                self.config.theme_mode,
+            )
+        flush_windows_menu_themes()
+        icon.visible = True
 
     def _load_unread_count(self) -> int:
         store = StateStore()
@@ -448,7 +464,19 @@ class TrayController:
         def handler(_icon, _item) -> None:
             self.config.theme_mode = mode
             self.config.save()
+
+            self._native_menu_theme = configure_windows_native_menu_theme(mode)
+            for attr in ("_hwnd", "_menu_hwnd"):
+                allow_windows_dark_mode_for_window(
+                    getattr(self.icon, attr, None),
+                    mode,
+                )
+
+            # Recreate the native HMENU after changing PreferredAppMode, then
+            # flush Windows' cached menu visuals so the next right-click uses
+            # the selected theme.
             self.icon.update_menu()
+            flush_windows_menu_themes()
 
         return handler
 
