@@ -113,7 +113,10 @@ async def run_once(
                 at=now,
             )
             if inserted and alert_callback is not None:
-                alert_callback(store.unread_alert_count())
+                try:
+                    alert_callback(store.unread_alert_count())
+                except Exception:
+                    logging.exception("alert callback failed")
             if notify(title, body):
                 notified += 1
         store.mark_seen(item.key, at=now)
