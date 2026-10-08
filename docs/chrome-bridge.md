@@ -78,6 +78,16 @@ still block it.
 - **Stäng av bakgrundsläge** stops the alarm and returns to legacy tab mode.
   **Öppna kontoflik (reserv)** still opens the working original page.
 
+If Chrome's extensions page reports `Uncaught Error: Extension context invalidated`
+from `relay.js` after reloading an unpacked extension, the old open
+Truth Social tab may still contain a content-script listener belonging to the
+previous extension instance. That old script cannot contact the new instance.
+Close the unnecessary account tab while BG is running (or reload the tab if
+using the tab fallback). The error listing is historical and can be cleared
+in `chrome://extensions`. The relay guards synchronous and asynchronous
+invalidated-context errors and detaches a stale listener. This error does not
+by itself indicate that the independently probed BG feed has failed.
+
 The extension intentionally does not use headless Playwright, launch another
 Chromium browser, connect Chrome via an exposed debugging port, or work around
 Cloudflare access controls. A separate automated Chromium was previously
