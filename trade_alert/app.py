@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from .config import Config, app_dir
 from .breaking import poll_breaking_inbox
 from .truth_rss import RSSUnavailable, read_rss_once
+from .truth_direct import DirectUnavailable, read_direct_once
 from .mcp_client import MCPToolError
 from .news import (
     DTVWatchlistContext,
@@ -327,6 +328,40 @@ async def _run_truth_rss_loop(
         await _sleep_interruptible(interval, stop_event)
 
 
+async def _run_truth_direct_loop(
+    config: Config, store: StateStore, *, stop_event=None,
+    pause_event=None, alert_callback=None,
+) -> None:
+    # Independent of both the RSS and MCP network fetches.
+    errors = 0
+    while stop_event is None or not stop_event.is_set():
+        if pause_event is not None and pause_event.is_set():
+            await _sleep_interruptible(0.5, stop_event)
+            continue
+        cooldown = config.truth_direct_poll_seconds
+        try:
+            outcome = await read_direct_once(config, store, alert_callback=alert_callback)
+            errors = 0
+            if outcome.get("notified") or outcome.get("status") == "BASELINED":
+                logging.info("Direct Truth Social public status: %s", outcome)
+        except DirectUnavailable as exc:
+            errors = min(errors + 1, 5)
+            store.set_meta("truth_direct_last_error", str(exc))
+            if exc.blocked:
+                # Do not retry an access denial, and do not rotate identity/IP.
+                cooldown = 3600 if "429" not in str(exc) else 1800
+                logging.error("Direct source refused anonymous access: %s", exc)
+            else:
+                cooldown = min(600, cooldown * (2 ** errors))
+                logging.warning("Direct source unavailable: %s", exc)
+        except Exception:
+            errors = min(errors + 1, 5)
+            store.set_meta("truth_direct_last_error", "unexpected source error")
+            cooldown = min(600, cooldown * (2 ** errors))
+            logging.exception("Unexpected direct public-source failure")
+        await _sleep_interruptible(cooldown, stop_event)
+
+
 async def run_loop(
     config: Config,
     store: StateStore,
@@ -336,7 +371,8 @@ async def run_loop(
     status_callback=None,
     alert_callback=None,
 ) -> None:
-    if not config.breaking_inbox_enabled and not config.truth_rss_enabled:
+    if not (config.breaking_inbox_enabled or config.truth_rss_enabled
+            or config.truth_direct_enabled):
         await _run_news_loop(
             config, store, stop_event=stop_event, pause_event=pause_event,
             status_callback=status_callback, alert_callback=alert_callback,
@@ -346,6 +382,13 @@ async def run_loop(
     if config.breaking_inbox_enabled:
         workers.append(asyncio.create_task(
             _run_breaking_loop(
+                config, store, stop_event=stop_event, pause_event=pause_event,
+                alert_callback=alert_callback,
+            )
+        ))
+    if config.truth_direct_enabled:
+        workers.append(asyncio.create_task(
+            _run_truth_direct_loop(
                 config, store, stop_event=stop_event, pause_event=pause_event,
                 alert_callback=alert_callback,
             )
@@ -379,6 +422,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Local low-latency trade news notifier")
     parser.add_argument("--once", action="store_true", help="Run one acquisition cycle and exit")
     parser.add_argument("--rss-once", action="store_true", help="Fetch and process independent Trump archive RSS once")
+    parser.add_argument("--direct-once", action="store_true", help="Probe anonymous public Truth Social API once")
     parser.add_argument("--test-notification", action="store_true", help="Show a Windows test notification and exit")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--no-tray", action="store_true", help="Run the monitor in the foreground without a tray icon")
@@ -405,6 +449,14 @@ def main() -> None:
                 result = asyncio.run(read_rss_once(config, store))
             except RSSUnavailable as exc:
                 print({"status": "FAILED", "source": "TRUMP_TRUTH_RSS", "reason": str(exc)})
+                raise SystemExit(2) from exc
+            print(result)
+            return
+        if args.direct_once:
+            try:
+                result = asyncio.run(read_direct_once(config, store))
+            except DirectUnavailable as exc:
+                print({"status": "FAILED", "source": "TRUTH_PUBLIC", "reason": str(exc)})
                 raise SystemExit(2) from exc
             print(result)
             return
