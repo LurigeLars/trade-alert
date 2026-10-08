@@ -56,6 +56,34 @@ Do not test by manipulating public source timestamps or sending fake live
 posts into production alert history. Python unit tests exercise ingestion
 with synthetic data in temporary databases.
 
+## Optional tab-free test (Chrome MV3 background service worker)
+
+Starting with extension version 0.2.0, click the extension icon to open its
+small control panel. Click **Testa och aktivera utan flik**. The service worker
+then tries the same FIXED public account endpoint in its *own* network context.
+No existing web-tab session, cookies, login tokens, IP changes or proxies are
+used. Chrome's `host_permissions` enable the request, but Cloudflare may
+still block it.
+
+- **HTTP_200 / BG badge:** the background request returned a verified public
+  account list. Chrome creates a 30-second repeating `chrome.alarms` task,
+  independent of any Truth Social tab. You may close the account tab, but Chrome
+  itself must stay running. This result is a current connectivity check, not a
+  tested continuous-latency SLA.
+- **HTTP_403 / 403 badge:** the background fetch was blocked. It remains
+  disabled, no automatic retry of the denied request is attempted, and you
+  should continue using the existing tab reader and RSS fallback.
+- **ERROR / ERR badge:** request, JSON or account verification failed. Do not
+  interpret it as a working background feed.
+- **Stäng av bakgrundsläge** stops the alarm and returns to legacy tab mode.
+  **Öppna kontoflik (reserv)** still opens the working original page.
+
+The extension intentionally does not use headless Playwright, launch another
+Chromium browser, connect Chrome via an exposed debugging port, or work around
+Cloudflare access controls. A separate automated Chromium was previously
+observed to receive an HTTP 403; Chrome's background worker may likewise be
+refused. A real user-machine test is mandatory.
+
 ## Security and reliability limits
 
 - The extension can read the fixed public JSON endpoint only from its listed
