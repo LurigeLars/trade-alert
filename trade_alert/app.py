@@ -20,7 +20,7 @@ from .news import (
 )
 from .notifier import notify
 from .state import StateStore
-from .windows_ui import configure_windows_dpi_awareness
+from .windows_ui import configure_windows_app_identity, configure_windows_dpi_awareness
 
 LOG_PATH = app_dir() / "trade-alert.log"
 
@@ -278,6 +278,7 @@ async def run_loop(
 
 
 def main() -> None:
+    app_identity = configure_windows_app_identity()
     dpi_awareness = configure_windows_dpi_awareness()
 
     parser = argparse.ArgumentParser(description="Local low-latency trade news notifier")
@@ -289,6 +290,7 @@ def main() -> None:
 
     _setup_logging(args.verbose)
     if os.name == "nt":
+        logging.info("Windows app identity: %s", app_identity)
         logging.info("Windows DPI awareness: %s", dpi_awareness)
     config = Config.load()
     if args.test_notification:
