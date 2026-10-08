@@ -33,11 +33,11 @@ IMPACT_TERMS = re.compile(
 )
 # US policy statements about military operations in Iran can immediately reprice
 # oil even if the provider headline has no oil symbol/word.
-IRAN_POLICY_ACTOR = re.compile(r"\\b(?:trump|president|white house|united states|u\\.?s\\.?)\\b", re.IGNORECASE)
-IRAN_POLICY_COUNTRY = re.compile(r"\\b(?:iran|tehran|hormuz)\\b", re.IGNORECASE)
+IRAN_POLICY_ACTOR = re.compile(r"\b(?:trump|president|white house|united states|u\.?s\.?)\b", re.IGNORECASE)
+IRAN_POLICY_COUNTRY = re.compile(r"\b(?:iran|tehran|hormuz)\b", re.IGNORECASE)
 IRAN_POLICY_ACTION = re.compile(
-    r"\\b(?:attack|attacks|attacking|strike|strikes|striking|military|"
-    r"talks|negotiations|sanction|sanctions|war|ceasefire|blockade)\\b",
+    r"\b(?:attack|attacks|attacking|strike|strikes|striking|military|"
+    r"talks|negotiations|sanction|sanctions|war|ceasefire|blockade)\b",
     re.IGNORECASE,
 )
 
