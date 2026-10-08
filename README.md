@@ -100,6 +100,8 @@ Unread real alerts are stored in local SQLite. The tray icon keeps a persistent 
 
 The information windows support selection, `Ctrl+A`, `Ctrl+C`, **Copy all**, scrolling, system-aware light/dark mode, and Per-Monitor DPI Awareness V2 on Windows. News links in **Latest alerts** are rendered as clickable hyperlinks; TradingView-relative `/news/...` paths are resolved to `https://www.tradingview.com`, while non-HTTP(S) schemes are deliberately not made clickable.
 
+Trade Alert also sets a stable Windows AppUserModelID and reuses the current tray icon for its Tk information windows. This keeps the same Trade Alert identity/icon in the notification area, the window title bar and the Windows taskbar instead of falling back to the generic Python icon.
+
 ## Quick start
 
 ### Requirements

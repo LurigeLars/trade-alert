@@ -5,6 +5,7 @@ from trade_alert.windows_ui import (
     PREFERRED_APP_MODE_ALLOW_DARK,
     PREFERRED_APP_MODE_FORCE_DARK,
     PREFERRED_APP_MODE_FORCE_LIGHT,
+    configure_windows_app_identity,
     configure_windows_dpi_awareness,
     configure_windows_native_menu_theme,
     preferred_app_mode,
@@ -12,6 +13,21 @@ from trade_alert.windows_ui import (
 
 
 class WindowsDpiTests(unittest.TestCase):
+    def test_app_identity_rejects_invalid_ids(self):
+        with self.assertRaises(ValueError):
+            configure_windows_app_identity("")
+        with self.assertRaises(ValueError):
+            configure_windows_app_identity("x" * 129)
+
+    @unittest.skipUnless(os.name == "nt", "Windows-only AppUserModelID API")
+    def test_app_identity_configuration_is_nonfatal(self):
+        result = configure_windows_app_identity()
+        self.assertTrue(
+            result == "set"
+            or result == "unavailable"
+            or result.startswith("hresult-0x")
+        )
+
     def test_preferred_app_mode_mapping(self):
         self.assertEqual(PREFERRED_APP_MODE_ALLOW_DARK, preferred_app_mode("system"))
         self.assertEqual(PREFERRED_APP_MODE_FORCE_DARK, preferred_app_mode("dark"))

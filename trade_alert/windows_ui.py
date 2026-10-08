@@ -8,6 +8,35 @@ DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
 PROCESS_PER_MONITOR_DPI_AWARE = 2
 ERROR_ACCESS_DENIED = 5
 E_ACCESSDENIED = 0x80070005
+TRADE_ALERT_APP_USER_MODEL_ID = "LurigeLars.TradeAlert.Desktop"
+
+
+def configure_windows_app_identity(
+    app_id: str = TRADE_ALERT_APP_USER_MODEL_ID,
+) -> str:
+    """Give Trade Alert a stable Windows taskbar identity.
+
+    pythonw.exe otherwise lends its executable identity/icon to Tk windows.
+    Setting an explicit AppUserModelID before UI creation lets Windows group
+    Trade Alert independently and use the window icon supplied by Tk.
+    """
+    if not app_id or len(app_id) > 128:
+        raise ValueError("app_id must be between 1 and 128 characters")
+    if os.name != "nt":
+        return "not-windows"
+
+    try:
+        shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+        setter = getattr(shell32, "SetCurrentProcessExplicitAppUserModelID", None)
+        if setter is None:
+            return "unavailable"
+        setter.argtypes = [ctypes.c_wchar_p]
+        setter.restype = ctypes.c_long
+        result = int(setter(app_id)) & 0xFFFFFFFF
+        return "set" if result == 0 else f"hresult-0x{result:08x}"
+    except (AttributeError, OSError):
+        logging.debug("Windows AppUserModelID API unavailable", exc_info=True)
+        return "unavailable"
 
 
 def configure_windows_dpi_awareness() -> str:
