@@ -31,6 +31,16 @@ IMPACT_TERMS = re.compile(
     r"\b(?:" + "|".join(re.escape(term) for term in IMPACT_TERM_LABELS) + r")\b",
     re.IGNORECASE,
 )
+# US policy statements about military operations in Iran can immediately reprice
+# oil even if the provider headline has no oil symbol/word.
+IRAN_POLICY_ACTOR = re.compile(r"\b(?:trump|president|white house|united states|u\.?s\.?)\b", re.IGNORECASE)
+IRAN_POLICY_COUNTRY = re.compile(r"\b(?:iran|tehran|hormuz)\b", re.IGNORECASE)
+IRAN_POLICY_ACTION = re.compile(
+    r"\b(?:attack|attacks|attacking|strike|strikes|striking|military|"
+    r"talks|negotiations|sanction|sanctions|war|ceasefire|blockade)\b",
+    re.IGNORECASE,
+)
+
 STANDALONE_HIGH_IMPACT_TERMS = re.compile(
     r"\b(?:" + "|".join(re.escape(term) for term in STANDALONE_HIGH_IMPACT_TERM_LABELS) + r")\b",
     re.IGNORECASE,
@@ -221,6 +231,11 @@ def relevance_score(item: Headline) -> int:
     routed = bool(OIL_ROUTING_SYMBOLS.intersection(item.related_symbols))
 
     score = 0
+    # Standalone policy surprise: do not require an oil keyword.
+    if (IRAN_POLICY_ACTOR.search(item.title)
+            and IRAN_POLICY_COUNTRY.search(item.title)
+            and IRAN_POLICY_ACTION.search(item.title)):
+        score += 4
     if core:
         score += 2
     if standalone_high_impact:

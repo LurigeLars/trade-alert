@@ -27,6 +27,11 @@ It is deliberately **not** an execution system. It has no broker login, order pl
 
 A slower portfolio process can be appropriate for thesis review and broad opportunity discovery, but it is not ideal for a live trade where a material headline should surface within seconds.
 
+Trade Alert fills that narrower gap. An independent 1-second local policy
+event inbox is available for **licensed/authorized upstream relays** (no new
+provider enabled by default). It does not wait for Trade Spine or DTV network
+calls. See [Fast policy alerts](docs/fast-policy-alerts.md).
+
 Trade Alert fills that narrower gap:
 
 ```text
@@ -161,6 +166,10 @@ Important settings include:
 | `dtv_max_headlines` | Broad News Flow fetch bound |
 | `official_max_headlines` | Per-symbol corroboration bound |
 | `notification_min_score` | Deterministic alert threshold |
+| `breaking_inbox_enabled` | Start separate local breaking-event intake task (does not enable an upstream provider) |
+| `breaking_poll_seconds` | Consumer cadence (1 second by default) |
+| `breaking_max_age_seconds` | Maximum age of policy events eligible for alert |
+| `breaking_authorized_sources` | Locally approved source identifiers; empty until a permitted provider is integrated |
 
 Local SQLite stores seen-headline dedupe, source cursors, locally resolved watchlist metadata and unread alert history.
 

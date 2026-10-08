@@ -13,5 +13,9 @@
   "notification_min_score": 2,
   "startup_fresh_seconds": 120,
   "dtv_max_headlines": 200,
-  "official_max_headlines": 25
+  "official_max_headlines": 25,
+  "breaking_inbox_enabled": true,
+  "breaking_poll_seconds": 1,
+  "breaking_max_age_seconds": 300,
+  "breaking_authorized_sources": []
 }

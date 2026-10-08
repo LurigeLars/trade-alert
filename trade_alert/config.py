@@ -29,6 +29,11 @@ class Config:
     official_max_headlines: int = 25
     notification_min_score: int = 2
     startup_fresh_seconds: int = 120
+    # Local-only ingress; no upstream connector or Truth Social scraper is bundled.
+    breaking_inbox_enabled: bool = True
+    breaking_poll_seconds: float = 1.0
+    breaking_max_age_seconds: int = 300
+    breaking_authorized_sources: tuple[str, ...] = ()
 
     @classmethod
     def load(cls, path: Path | None = None) -> "Config":
@@ -54,6 +59,8 @@ class Config:
                 symbols = DEFAULT_OFFICIAL_SYMBOLS
                 migrated = True
             raw["official_symbols"] = symbols
+        if "breaking_authorized_sources" in raw:
+            raw["breaking_authorized_sources"] = tuple(raw["breaking_authorized_sources"])
         config = cls(**raw)
         config.validate()
         if migrated:
@@ -77,6 +84,17 @@ class Config:
             raise ValueError("notification_min_score must be between 0 and 10")
         if not 0 <= int(self.startup_fresh_seconds) <= 3600:
             raise ValueError("startup_fresh_seconds must be between 0 and 3600")
+        if not isinstance(self.breaking_inbox_enabled, bool):
+            raise ValueError("breaking_inbox_enabled must be a boolean")
+        if not 0.2 <= float(self.breaking_poll_seconds) <= 60:
+            raise ValueError("breaking_poll_seconds must be between 0.2 and 60")
+        if not 10 <= int(self.breaking_max_age_seconds) <= 3600:
+            raise ValueError("breaking_max_age_seconds must be between 10 and 3600")
+        if len(self.breaking_authorized_sources) != len(set(self.breaking_authorized_sources)):
+            raise ValueError("duplicate breaking source identifiers")
+        for name in self.breaking_authorized_sources:
+            if not isinstance(name, str) or not name.isupper() or len(name) > 80:
+                raise ValueError("invalid breaking source identifier")
         if self.dtv_watchlist_id is not None and not str(self.dtv_watchlist_id).isdigit():
             raise ValueError("dtv_watchlist_id must be numeric when set")
         for symbol in self.official_symbols:
@@ -89,5 +107,6 @@ class Config:
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = asdict(self)
         payload["official_symbols"] = list(self.official_symbols)
+        payload["breaking_authorized_sources"] = list(self.breaking_authorized_sources)
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return path
