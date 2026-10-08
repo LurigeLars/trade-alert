@@ -59,6 +59,8 @@ class DirectParsingTests(unittest.TestCase):
             parse_statuses(b'{"error":"not authenticated"}', fetched_at=T0)
         with self.assertRaises(DirectUnavailable):
             parse_statuses(b"not json", fetched_at=T0)
+        with self.assertRaises(DirectUnavailable):
+            parse_statuses(b"[]", fetched_at=T0)
 
     def test_html_is_inert_text_and_deduplicated(self):
         x = post(text="Iran <b>oil</b> talks")
