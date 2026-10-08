@@ -11,6 +11,12 @@ It continuously reads bounded news feeds, applies deterministic relevance rules,
 
 A [direct public Truth Social reader](docs/truth-direct.md) checks the anonymous public JSON endpoint for the verified Trump account every 15 seconds when reachable, with failure backoff and RSS as a fallback. Availability must be verified from the Windows host; it never logs in or evades access restrictions.
 
+An optional [local Chrome bridge prototype](docs/chrome-bridge.md) transfers newly
+observed posts through Chrome's own Downloads folder into Trade Alert's unread
+alert history. It is disabled by default and must be explicitly installed in
+Chrome. Successful manual Chrome fetches do not guarantee that an extension
+will remain active in background tabs. No proxy rotation or cookie export.
+
 An independent [Trump's Truth RSS monitor](docs/trump-truth-rss.md) provides a public, third-party source for presidential statements. Its own provider generally updates every few minutes: it is not an institutional breaking wire or a direct Truth Social API.
 
 It is deliberately **not** an execution system. It has no broker login, order placement, order modification, or order-cancellation capability.
@@ -183,6 +189,9 @@ Important settings include:
 | `truth_direct_enabled` | Attempt anonymous public Truth Social account reading (may be blocked) |
 | `truth_direct_poll_seconds` | Direct source cadence, with strict backoff for 401/403/429 |
 | `truth_direct_max_age_seconds` | Maximum age for a new direct-post alert |
+| `chrome_bridge_enabled` | Enable local Chrome download-file reader (off by default) |
+| `chrome_bridge_poll_seconds` | Local file scan cadence (default 1 second) |
+| `chrome_bridge_max_age_seconds` | Maximum age for new Chrome relay alerts |
 
 Local SQLite stores seen-headline dedupe, source cursors, locally resolved watchlist metadata and unread alert history.
 
