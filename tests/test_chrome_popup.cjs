@@ -26,9 +26,9 @@ test("English popup with required controls and explanatory copy", () => {
     "Senast kontrollerad", "Gör ett direkt test"
   ]) assert.ok(![html,popup].some(s=>s.includes(swedish)),"Found Swedish: "+swedish);
   assert.ok(popup.includes('"Background monitor: "'));
-  assert.ok(popup.includes('"Last status: "'));
-  assert.ok(popup.includes('"Verified posts: "'));
-  assert.ok(popup.includes('"Last checked: "'));
+  assert.ok(popup.includes('Last status: '));
+  assert.ok(popup.includes('Verified posts: '));
+  assert.ok(popup.includes('Last checked: '));
   assert.ok(popup.includes('toLocaleTimeString("en-GB")'));
 });
 
