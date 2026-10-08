@@ -9,6 +9,8 @@ Trade Alert is a small Windows tray application for **low-latency market-news al
 
 It continuously reads bounded news feeds, applies deterministic relevance rules, shows Windows notifications, and keeps an unread local alert history so a missed toast is still visible later.
 
+An independent [Trump's Truth RSS monitor](docs/trump-truth-rss.md) provides a public, third-party source for presidential statements. Its own provider generally updates every few minutes: it is not an institutional breaking wire or a direct Truth Social API.
+
 It is deliberately **not** an execution system. It has no broker login, order placement, order modification, or order-cancellation capability.
 
 ## Current deployment and security posture
@@ -133,6 +135,7 @@ Smoke tests:
 uv run --python 3.12 python -m unittest discover -s tests -p "test_*.py"
 uv run --python 3.12 python -m trade_alert --test-notification
 uv run --python 3.12 python -m trade_alert --once
+uv run --python 3.12 python -m trade_alert --rss-once   # direct source connectivity smoke
 ```
 
 Install the per-user tray startup:
@@ -170,6 +173,9 @@ Important settings include:
 | `breaking_poll_seconds` | Consumer cadence (1 second by default) |
 | `breaking_max_age_seconds` | Maximum age of policy events eligible for alert |
 | `breaking_authorized_sources` | Locally approved source identifiers; empty until a permitted provider is integrated |
+| `truth_rss_enabled` | Enable independent third-party public RSS source |
+| `truth_rss_poll_seconds` | RSS check cadence (default 30 s, with failure backoff) |
+| `truth_rss_max_age_seconds` | Maximum age of RSS items eligible for a new Windows alert |
 
 Local SQLite stores seen-headline dedupe, source cursors, locally resolved watchlist metadata and unread alert history.
 
