@@ -69,7 +69,7 @@ def _classify_denial(status: int, headers, sample: bytes, elapsed_ms: int) -> di
         "geographic restriction", "geoblocked", "geo-blocked"
     )):
         reason = "POSSIBLE_GEOGRAPHIC_RESTRICTION"
-    elif "error 1020" in body or "error code 1020" in body:
+    elif any(t in body for t in ("error 1020", "error code 1020", "error code: 1020")):
         reason = "CLOUDFLARE_WAF_1020"
     elif status == 401 or (
         content_type and "json" in content_type.lower()
@@ -209,7 +209,10 @@ def fetch_public_statuses(*, timeout: float = 6.0) -> DirectResult:
     except urllib.error.HTTPError as exc:
         blocked = exc.code in (401, 403, 429)
         # Bounded inspection; never retain/print the HTTP response body.
-        sample = exc.read(4096)
+        try:
+            sample = exc.read(4096)
+        except (AttributeError, OSError, ValueError):
+            sample = b""
         metadata = _classify_denial(
             exc.code, exc.headers or {}, sample,
             int((time.monotonic() - started) * 1000),
