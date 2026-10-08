@@ -418,7 +418,11 @@ class TrayController:
             title=self._tooltip(),
             menu=pystray.Menu(
                 pystray.MenuItem(lambda _item: self._status_line(), None, enabled=False),
-                pystray.MenuItem(lambda _item: self._alerts_label(), self._show_alert_history),
+                pystray.MenuItem(
+                    lambda _item: self._alerts_label(),
+                    self._show_alert_history,
+                    default=True,
+                ),
                 pystray.MenuItem("Vad bevakas?", self._show_monitoring),
                 pystray.MenuItem(
                     "Tema",
