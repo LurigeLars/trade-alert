@@ -34,6 +34,10 @@ class Config:
     breaking_poll_seconds: float = 1.0
     breaking_max_age_seconds: int = 300
     breaking_authorized_sources: tuple[str, ...] = ()
+    # Public third-party archive explicitly offers a subscription RSS endpoint.
+    truth_rss_enabled: bool = True
+    truth_rss_poll_seconds: int = 30
+    truth_rss_max_age_seconds: int = 900
 
     @classmethod
     def load(cls, path: Path | None = None) -> "Config":
@@ -95,6 +99,12 @@ class Config:
         for name in self.breaking_authorized_sources:
             if not isinstance(name, str) or not name.isupper() or len(name) > 80:
                 raise ValueError("invalid breaking source identifier")
+        if not isinstance(self.truth_rss_enabled, bool):
+            raise ValueError("truth_rss_enabled must be boolean")
+        if not 20 <= int(self.truth_rss_poll_seconds) <= 3600:
+            raise ValueError("truth_rss_poll_seconds must be 20-3600")
+        if not 60 <= int(self.truth_rss_max_age_seconds) <= 3600:
+            raise ValueError("truth_rss_max_age_seconds must be 60-3600")
         if self.dtv_watchlist_id is not None and not str(self.dtv_watchlist_id).isdigit():
             raise ValueError("dtv_watchlist_id must be numeric when set")
         for symbol in self.official_symbols:
