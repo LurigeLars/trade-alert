@@ -416,7 +416,16 @@ class TrayController:
             "Trade Alert",
             icon=make_status_icon("waiting", self._unread_count),
             title=self._tooltip(),
-            menu=pystray.Menu(
+            menu=self._build_menu(),
+        )
+        self.worker = threading.Thread(
+            target=self._worker_main,
+            name="TradeAlertMonitor",
+            daemon=True,
+        )
+
+    def _build_menu(self) -> pystray.Menu:
+        return pystray.Menu(
                 pystray.MenuItem(lambda _item: self._status_line(), None, enabled=False),
                 pystray.MenuItem(
                     lambda _item: self._alerts_label(),
@@ -456,13 +465,7 @@ class TrayController:
                 pystray.MenuItem("Öppna loggmapp", self._open_logs),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Avsluta Trade Alert", self._exit),
-            ),
-        )
-        self.worker = threading.Thread(
-            target=self._worker_main,
-            name="TradeAlertMonitor",
-            daemon=True,
-        )
+            )
 
     def run(self) -> None:
         self.worker.start()
