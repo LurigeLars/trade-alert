@@ -49,7 +49,9 @@ class DirectUnavailable(RuntimeError):
 def _safe_header(value: object, *, limit: int = 100) -> str | None:
     if not isinstance(value, str):
         return None
-    clean = "".join(ch for ch in value[:limit] if ch.isascii()
+    # CR/LF must never turn extra response headers into a log field.
+    first_line = value.splitlines()[0] if value.splitlines() else ""
+    clean = "".join(ch for ch in first_line[:limit] if ch.isascii()
                     and (ch.isalnum() or ch in " .;/=_-"))
     return clean or None
 
