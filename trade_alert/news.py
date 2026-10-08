@@ -74,6 +74,11 @@ class Headline:
         return f"{self.source}:{self.item_id}"
 
     @property
+    def dedupe_key(self) -> str:
+        """Provider item identity independent of discovery source."""
+        return self.item_id
+
+    @property
     def age_seconds(self) -> float | None:
         if self.published is None:
             return None
