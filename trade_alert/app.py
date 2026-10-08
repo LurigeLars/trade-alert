@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from .config import Config, app_dir
 from .breaking import poll_breaking_inbox
+from .truth_rss import RSSUnavailable, read_rss_once
 from .mcp_client import MCPToolError
 from .news import (
     DTVWatchlistContext,
@@ -300,6 +301,32 @@ async def _run_breaking_loop(
         await _sleep_interruptible(config.breaking_poll_seconds, stop_event)
 
 
+async def _run_truth_rss_loop(
+    config: Config, store: StateStore, *, stop_event=None,
+    pause_event=None, alert_callback=None,
+) -> None:
+    # Separate bounded RSS fetch thread; independent of DTV and Trade Spine.
+    error_streak = 0
+    while stop_event is None or not stop_event.is_set():
+        if pause_event is not None and pause_event.is_set():
+            await _sleep_interruptible(0.5, stop_event)
+            continue
+        try:
+            outcome = await read_rss_once(
+                config, store, alert_callback=alert_callback)
+            error_streak = 0
+            if outcome.get("alerted") or outcome.get("status") == "BASELINED":
+                logging.info("Truth archive RSS: %s", outcome)
+        except (RSSUnavailable, ValueError) as exc:
+            error_streak = min(error_streak + 1, 5)
+            logging.warning("Truth archive RSS unavailable: %s", exc)
+        except Exception:
+            error_streak = min(error_streak + 1, 5)
+            logging.exception("Unexpected Truth archive RSS failure")
+        interval = min(600, config.truth_rss_poll_seconds * (2 ** error_streak))
+        await _sleep_interruptible(interval, stop_event)
+
+
 async def run_loop(
     config: Config,
     store: StateStore,
@@ -309,29 +336,40 @@ async def run_loop(
     status_callback=None,
     alert_callback=None,
 ) -> None:
-    if not config.breaking_inbox_enabled:
+    if not config.breaking_inbox_enabled and not config.truth_rss_enabled:
         await _run_news_loop(
             config, store, stop_event=stop_event, pause_event=pause_event,
             status_callback=status_callback, alert_callback=alert_callback,
         )
         return
-    worker = asyncio.create_task(
-        _run_breaking_loop(
-            config, store, stop_event=stop_event, pause_event=pause_event,
-            alert_callback=alert_callback,
-        )
-    )
+    workers = []
+    if config.breaking_inbox_enabled:
+        workers.append(asyncio.create_task(
+            _run_breaking_loop(
+                config, store, stop_event=stop_event, pause_event=pause_event,
+                alert_callback=alert_callback,
+            )
+        ))
+    if config.truth_rss_enabled:
+        workers.append(asyncio.create_task(
+            _run_truth_rss_loop(
+                config, store, stop_event=stop_event, pause_event=pause_event,
+                alert_callback=alert_callback,
+            )
+        ))
     try:
         await _run_news_loop(
             config, store, stop_event=stop_event, pause_event=pause_event,
             status_callback=status_callback, alert_callback=alert_callback,
         )
     finally:
-        worker.cancel()
-        try:
-            await worker
-        except asyncio.CancelledError:
-            pass
+        for worker in workers:
+            worker.cancel()
+        for worker in workers:
+            try:
+                await worker
+            except asyncio.CancelledError:
+                pass
 
 
 def main() -> None:
