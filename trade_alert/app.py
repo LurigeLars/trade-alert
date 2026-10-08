@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timezone
 
 from .config import Config, app_dir
+from .breaking import poll_breaking_inbox
 from .mcp_client import MCPToolError
 from .news import (
     DTVWatchlistContext,
@@ -218,7 +219,7 @@ async def _sleep_interruptible(seconds: float, stop_event=None) -> None:
         await asyncio.sleep(min(0.5, max(0.0, deadline - time.monotonic())))
 
 
-async def run_loop(
+async def _run_news_loop(
     config: Config,
     store: StateStore,
     *,
@@ -275,6 +276,62 @@ async def run_loop(
         if include_official:
             next_official = time.monotonic() + config.official_poll_seconds
         await _sleep_interruptible(config.poll_seconds, stop_event)
+
+
+async def _run_breaking_loop(
+    config: Config,
+    store: StateStore,
+    *,
+    stop_event=None,
+    pause_event=None,
+    alert_callback=None,
+) -> None:
+    # Separate coroutine: not gated on TradingView or Trade Spine network requests.
+    while stop_event is None or not stop_event.is_set():
+        if pause_event is None or not pause_event.is_set():
+            try:
+                result = poll_breaking_inbox(
+                    config, store, alert_callback=alert_callback
+                )
+                if any(result.values()):
+                    logging.info("breaking-policy-inbox=%s", result)
+            except Exception:
+                logging.exception("breaking-policy-inbox failed")
+        await _sleep_interruptible(config.breaking_poll_seconds, stop_event)
+
+
+async def run_loop(
+    config: Config,
+    store: StateStore,
+    *,
+    stop_event=None,
+    pause_event=None,
+    status_callback=None,
+    alert_callback=None,
+) -> None:
+    if not config.breaking_inbox_enabled:
+        await _run_news_loop(
+            config, store, stop_event=stop_event, pause_event=pause_event,
+            status_callback=status_callback, alert_callback=alert_callback,
+        )
+        return
+    worker = asyncio.create_task(
+        _run_breaking_loop(
+            config, store, stop_event=stop_event, pause_event=pause_event,
+            alert_callback=alert_callback,
+        )
+    )
+    try:
+        await _run_news_loop(
+            config, store, stop_event=stop_event, pause_event=pause_event,
+            status_callback=status_callback, alert_callback=alert_callback,
+        )
+    finally:
+        worker.cancel()
+        try:
+            await worker
+        except asyncio.CancelledError:
+            pass
 
 
 def main() -> None:
