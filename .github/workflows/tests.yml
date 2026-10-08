@@ -41,6 +41,15 @@ jobs:
       - name: Package smoke test
         run: python -m trade_alert --help
 
+      - name: Chrome extension JavaScript checks
+        shell: pwsh
+        run: |
+          node --check .\chrome_extension\reader.js
+          node --check .\chrome_extension\relay.js
+          node --check .\chrome_extension\background.js
+          node --test .\tests\test_chrome_extension.cjs
+
+
       - name: PowerShell syntax
         shell: pwsh
         run: |
