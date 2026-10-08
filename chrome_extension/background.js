@@ -165,15 +165,15 @@ async function backgroundStatus() {
 async function paintBackground(status) {
   const denied = ["HTTP_401", "HTTP_403", "HTTP_429"].includes(status);
   await chrome.action.setBadgeText({
-    text: status === "HTTP_200" ? "BG" : denied ? "403" : "ERR"
+    text: status === "HTTP_200" ? "ON" : denied ? "403" : "ERR"
   });
   await chrome.action.setBadgeBackgroundColor({
     color: status === "HTTP_200" ? "#228b22" : "#b00020"
   });
   await chrome.action.setTitle({
     title: status === "HTTP_200"
-      ? "Trade Alert: bakgrundsläge aktivt (Chrome måste vara igång)"
-      : "Trade Alert: bakgrundshämtning " + status + " – kontrollera tillägget"
+      ? "Trade Alert: Trump Monitor ON (keep Chrome running)"
+      : "Trade Alert: Trump Monitor " + status + " – check extension status"
   });
 }
 
