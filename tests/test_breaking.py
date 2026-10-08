@@ -117,7 +117,8 @@ class IndependentBreakingLoop(unittest.IsolatedAsyncioTestCase):
             inbox.mkdir()
             (inbox / "incoming.json").write_text(json.dumps(event))
             cfg = Config(breaking_inbox_enabled=True, breaking_poll_seconds=0.2,
-                         breaking_authorized_sources=(TRUTH_SOURCE,))
+                         breaking_authorized_sources=(TRUTH_SOURCE,),
+                         truth_direct_enabled=False)
             stop = asyncio.Event()
             notifications = []
             # Patch only inbox location, not intake validation. Network fetch

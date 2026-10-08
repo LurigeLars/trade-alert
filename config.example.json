@@ -20,5 +20,8 @@
   "breaking_authorized_sources": [],
   "truth_rss_enabled": true,
   "truth_rss_poll_seconds": 30,
-  "truth_rss_max_age_seconds": 900
+  "truth_rss_max_age_seconds": 900,
+  "truth_direct_enabled": true,
+  "truth_direct_poll_seconds": 15,
+  "truth_direct_max_age_seconds": 300
 }

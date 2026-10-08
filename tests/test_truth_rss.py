@@ -98,7 +98,8 @@ class RSSIntakeTests(unittest.IsolatedAsyncioTestCase):
     async def test_rss_notification_is_not_blocked_by_hanging_mcp_news(self):
         with tempfile.TemporaryDirectory() as td:
             store = StateStore(pathlib.Path(td) / "state.db")
-            cfg = Config(breaking_inbox_enabled=False, truth_rss_enabled=True)
+            cfg = Config(breaking_inbox_enabled=False, truth_rss_enabled=True,
+                         truth_direct_enabled=False)
             calls = []
             stop = asyncio.Event()
             async def mocked_rss(*a, **kw):
