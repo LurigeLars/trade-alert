@@ -378,6 +378,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Local low-latency trade news notifier")
     parser.add_argument("--once", action="store_true", help="Run one acquisition cycle and exit")
+    parser.add_argument("--rss-once", action="store_true", help="Fetch and process independent Trump archive RSS once")
     parser.add_argument("--test-notification", action="store_true", help="Show a Windows test notification and exit")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--no-tray", action="store_true", help="Run the monitor in the foreground without a tray icon")
@@ -397,6 +398,14 @@ def main() -> None:
     try:
         if args.once:
             result = asyncio.run(run_once(config, store))
+            print(result)
+            return
+        if args.rss_once:
+            try:
+                result = asyncio.run(read_rss_once(config, store))
+            except RSSUnavailable as exc:
+                print({"status": "FAILED", "source": "TRUMP_TRUTH_RSS", "reason": str(exc)})
+                raise SystemExit(2) from exc
             print(result)
             return
     finally:
