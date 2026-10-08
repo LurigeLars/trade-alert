@@ -139,6 +139,7 @@ uv run --python 3.12 python -m trade_alert --test-notification
 uv run --python 3.12 python -m trade_alert --once
 uv run --python 3.12 python -m trade_alert --rss-once   # direct source connectivity smoke
 uv run --python 3.12 python -m trade_alert --direct-once  # anonymous direct-access smoke
+uv run --python 3.12 python -m trade_alert --diagnose-direct # read-only bounded HTTP 403 diagnostics
 ```
 
 Install the per-user tray startup:
