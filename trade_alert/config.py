@@ -38,6 +38,10 @@ class Config:
     truth_rss_enabled: bool = True
     truth_rss_poll_seconds: int = 30
     truth_rss_max_age_seconds: int = 900
+    # Anonymous public-account endpoint; refuses any login wall or denial.
+    truth_direct_enabled: bool = True
+    truth_direct_poll_seconds: int = 15
+    truth_direct_max_age_seconds: int = 300
 
     @classmethod
     def load(cls, path: Path | None = None) -> "Config":
@@ -105,6 +109,12 @@ class Config:
             raise ValueError("truth_rss_poll_seconds must be 20-3600")
         if not 60 <= int(self.truth_rss_max_age_seconds) <= 3600:
             raise ValueError("truth_rss_max_age_seconds must be 60-3600")
+        if not isinstance(self.truth_direct_enabled, bool):
+            raise ValueError("truth_direct_enabled must be boolean")
+        if not 10 <= int(self.truth_direct_poll_seconds) <= 3600:
+            raise ValueError("truth_direct_poll_seconds must be 10-3600")
+        if not 30 <= int(self.truth_direct_max_age_seconds) <= 3600:
+            raise ValueError("truth_direct_max_age_seconds must be 30-3600")
         if self.dtv_watchlist_id is not None and not str(self.dtv_watchlist_id).isdigit():
             raise ValueError("dtv_watchlist_id must be numeric when set")
         for symbol in self.official_symbols:

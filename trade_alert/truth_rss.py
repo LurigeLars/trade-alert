@@ -176,6 +176,19 @@ async def read_rss_once(config: Config, store: StateStore, *,
     if result.not_modified:
         return {"status": "NOT_MODIFIED", "notified": 0, "new": 0}
     initial = store.get_meta("truth_rss_initialized") is None
+    # The direct primary reader owns fresh alerts when its latest check is healthy.
+    # Keep fetching/baselining the archive to provide fallback after an outage.
+    direct_healthy = False
+    direct_at = store.get_meta("truth_direct_last_success")
+    direct_error = store.get_meta("truth_direct_last_error")
+    if config.truth_direct_enabled and direct_at and not direct_error:
+        try:
+            direct_time = datetime.fromisoformat(
+                direct_at.replace("Z", "+00:00")).timestamp()
+            direct_healthy = 0 <= moment - direct_time <= max(
+                60, config.truth_direct_poll_seconds * 4)
+        except ValueError:
+            pass
     seen_count = notified = alerted = 0
     notification = notification or notify
     for post in sorted(result.posts, key=lambda p: p.published):
@@ -185,7 +198,7 @@ async def read_rss_once(config: Config, store: StateStore, *,
         seen_count += 1
         store.mark_seen(key, at=moment)
         age = moment - post.published
-        if (initial or age > config.truth_rss_max_age_seconds
+        if (initial or direct_healthy or age > config.truth_rss_max_age_seconds
                 or age < -120):
             continue
         # Account identity comes from a third-party archive. Do not attribute

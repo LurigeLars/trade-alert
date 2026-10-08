@@ -9,6 +9,8 @@ Trade Alert is a small Windows tray application for **low-latency market-news al
 
 It continuously reads bounded news feeds, applies deterministic relevance rules, shows Windows notifications, and keeps an unread local alert history so a missed toast is still visible later.
 
+A [direct public Truth Social reader](docs/truth-direct.md) checks the anonymous public JSON endpoint for the verified Trump account every 15 seconds when reachable, with failure backoff and RSS as a fallback. Availability must be verified from the Windows host; it never logs in or evades access restrictions.
+
 An independent [Trump's Truth RSS monitor](docs/trump-truth-rss.md) provides a public, third-party source for presidential statements. Its own provider generally updates every few minutes: it is not an institutional breaking wire or a direct Truth Social API.
 
 It is deliberately **not** an execution system. It has no broker login, order placement, order modification, or order-cancellation capability.
@@ -136,6 +138,7 @@ uv run --python 3.12 python -m unittest discover -s tests -p "test_*.py"
 uv run --python 3.12 python -m trade_alert --test-notification
 uv run --python 3.12 python -m trade_alert --once
 uv run --python 3.12 python -m trade_alert --rss-once   # direct source connectivity smoke
+uv run --python 3.12 python -m trade_alert --direct-once  # anonymous direct-access smoke
 ```
 
 Install the per-user tray startup:
@@ -176,6 +179,9 @@ Important settings include:
 | `truth_rss_enabled` | Enable independent third-party public RSS source |
 | `truth_rss_poll_seconds` | RSS check cadence (default 30 s, with failure backoff) |
 | `truth_rss_max_age_seconds` | Maximum age of RSS items eligible for a new Windows alert |
+| `truth_direct_enabled` | Attempt anonymous public Truth Social account reading (may be blocked) |
+| `truth_direct_poll_seconds` | Direct source cadence, with strict backoff for 401/403/429 |
+| `truth_direct_max_age_seconds` | Maximum age for a new direct-post alert |
 
 Local SQLite stores seen-headline dedupe, source cursors, locally resolved watchlist metadata and unread alert history.
 
