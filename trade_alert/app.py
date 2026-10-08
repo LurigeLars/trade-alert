@@ -12,6 +12,7 @@ from .config import Config, app_dir
 from .breaking import poll_breaking_inbox
 from .truth_rss import RSSUnavailable, read_rss_once
 from .truth_direct import DirectUnavailable, fetch_public_statuses, read_direct_once
+from .chrome_feed import poll_browser_feed
 from .mcp_client import MCPToolError
 from .news import (
     DTVWatchlistContext,
@@ -362,6 +363,22 @@ async def _run_truth_direct_loop(
         await _sleep_interruptible(cooldown, stop_event)
 
 
+async def _run_chrome_bridge_loop(
+    config: Config, store: StateStore, *, stop_event=None,
+    pause_event=None, alert_callback=None,
+) -> None:
+    while stop_event is None or not stop_event.is_set():
+        if pause_event is None or not pause_event.is_set():
+            try:
+                stats = poll_browser_feed(
+                    config, store, alert_callback=alert_callback)
+                if stats["alerts"] or stats["rejected"]:
+                    logging.info("Chrome local bridge: %s", stats)
+            except Exception:
+                logging.exception("Chrome local bridge error")
+        await _sleep_interruptible(config.chrome_bridge_poll_seconds, stop_event)
+
+
 async def run_loop(
     config: Config,
     store: StateStore,
@@ -372,7 +389,7 @@ async def run_loop(
     alert_callback=None,
 ) -> None:
     if not (config.breaking_inbox_enabled or config.truth_rss_enabled
-            or config.truth_direct_enabled):
+            or config.truth_direct_enabled or config.chrome_bridge_enabled):
         await _run_news_loop(
             config, store, stop_event=stop_event, pause_event=pause_event,
             status_callback=status_callback, alert_callback=alert_callback,
@@ -382,6 +399,13 @@ async def run_loop(
     if config.breaking_inbox_enabled:
         workers.append(asyncio.create_task(
             _run_breaking_loop(
+                config, store, stop_event=stop_event, pause_event=pause_event,
+                alert_callback=alert_callback,
+            )
+        ))
+    if config.chrome_bridge_enabled:
+        workers.append(asyncio.create_task(
+            _run_chrome_bridge_loop(
                 config, store, stop_event=stop_event, pause_event=pause_event,
                 alert_callback=alert_callback,
             )

@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Trade Alert – Chrome public feed (prototype)",
+  "version": "0.1.0",
+  "description": "Local transfer of newly observed public account posts to Trade Alert, without cookies or network listener.",
+  "permissions": [
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://truthsocial.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://truthsocial.com/*"
+      ],
+      "js": [
+        "relay.js"
+      ],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
+    },
+    {
+      "matches": [
+        "https://truthsocial.com/*"
+      ],
+      "js": [
+        "reader.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "action": {
+    "default_title": "Trade Alert Chrome bridge: click to open account"
+  }
+}

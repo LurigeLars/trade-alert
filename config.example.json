@@ -23,5 +23,8 @@
   "truth_rss_max_age_seconds": 900,
   "truth_direct_enabled": true,
   "truth_direct_poll_seconds": 15,
-  "truth_direct_max_age_seconds": 300
+  "truth_direct_max_age_seconds": 300,
+  "chrome_bridge_enabled": false,
+  "chrome_bridge_poll_seconds": 1,
+  "chrome_bridge_max_age_seconds": 300
 }

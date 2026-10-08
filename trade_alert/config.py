@@ -42,6 +42,10 @@ class Config:
     truth_direct_enabled: bool = True
     truth_direct_poll_seconds: int = 15
     truth_direct_max_age_seconds: int = 300
+    # Optional local Chrome extension. Does not manage browser sessions.
+    chrome_bridge_enabled: bool = False
+    chrome_bridge_poll_seconds: float = 1.0
+    chrome_bridge_max_age_seconds: int = 300
 
     @classmethod
     def load(cls, path: Path | None = None) -> "Config":
@@ -115,6 +119,12 @@ class Config:
             raise ValueError("truth_direct_poll_seconds must be 10-3600")
         if not 30 <= int(self.truth_direct_max_age_seconds) <= 3600:
             raise ValueError("truth_direct_max_age_seconds must be 30-3600")
+        if not isinstance(self.chrome_bridge_enabled, bool):
+            raise ValueError("chrome_bridge_enabled must be boolean")
+        if not 0.2 <= float(self.chrome_bridge_poll_seconds) <= 30:
+            raise ValueError("chrome_bridge_poll_seconds must be 0.2-30")
+        if not 30 <= int(self.chrome_bridge_max_age_seconds) <= 1800:
+            raise ValueError("chrome_bridge_max_age_seconds must be 30-1800")
         if self.dtv_watchlist_id is not None and not str(self.dtv_watchlist_id).isdigit():
             raise ValueError("dtv_watchlist_id must be numeric when set")
         for symbol in self.official_symbols:
