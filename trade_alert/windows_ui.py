@@ -20,10 +20,10 @@ def configure_windows_app_identity(
     Setting an explicit AppUserModelID before UI creation lets Windows group
     Trade Alert independently and use the window icon supplied by Tk.
     """
-    if os.name != "nt":
-        return "not-windows"
     if not app_id or len(app_id) > 128:
         raise ValueError("app_id must be between 1 and 128 characters")
+    if os.name != "nt":
+        return "not-windows"
 
     try:
         shell32 = ctypes.WinDLL("shell32", use_last_error=True)
