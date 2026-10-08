@@ -47,12 +47,14 @@ class DirectParsingTests(unittest.TestCase):
 
     def test_wrong_account_private_bad_id_and_invalid_json_are_rejected(self):
         p = post(acct="impostor")
-        self.assertEqual(parse_statuses(fixture(p), fetched_at=T0).posts, ())
-        self.assertEqual(parse_statuses(fixture(post(account_id="2222")),
-                                        fetched_at=T0).posts, ())
+        with self.assertRaises(DirectUnavailable):
+            parse_statuses(fixture(p), fetched_at=T0)
+        with self.assertRaises(DirectUnavailable):
+            parse_statuses(fixture(post(account_id="2222")), fetched_at=T0)
         z = post()
         z["visibility"] = "private"
-        self.assertEqual(parse_statuses(fixture(z), fetched_at=T0).posts, ())
+        with self.assertRaises(DirectUnavailable):
+            parse_statuses(fixture(z), fetched_at=T0)
         with self.assertRaises(DirectUnavailable):
             parse_statuses(b'{"error":"not authenticated"}', fetched_at=T0)
         with self.assertRaises(DirectUnavailable):
