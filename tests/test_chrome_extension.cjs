@@ -11,8 +11,21 @@ function harness() {
   const seenState = {};
   const downloads = [];
   const badges = [];
+  const alarms = new Map();
+  let nextFetch = async () => {throw Error("No mocked background fetch");};
   const chrome = {
-    runtime: {onMessage: {addListener(fn) {listeners.message = fn;}}},
+    runtime: {
+      id: "test-extension",
+      getURL(name) {return "chrome-extension://test-extension/" + name;},
+      onMessage: {addListener(fn) {listeners.message = fn;}},
+      onStartup: {addListener(fn) {listeners.startup = fn;}},
+      onInstalled: {addListener(fn) {listeners.installed = fn;}}
+    },
+    alarms: {
+      onAlarm: {addListener(fn) {listeners.alarm = fn;}},
+      async create(name, info) {alarms.set(name, info);},
+      async clear(name) {alarms.delete(name);return true;}
+    },
     storage: {local: {
       async get(keys) {
         const out = {};
@@ -38,14 +51,31 @@ function harness() {
   const code = fs.readFileSync(
     path.join(__dirname, "..", "chrome_extension", "background.js"), "utf8"
   );
-  vm.runInNewContext(code, {chrome, console, URL, Date, Set}, {filename:"background.js"});
+  vm.runInNewContext(code, {
+    chrome, console, URL, Date, Set,
+    fetch: (...args) => nextFetch(...args),
+    AbortSignal,
+  }, {filename:"background.js"});
   async function send(msg, senderUrl="https://truthsocial.com/@realDonaldTrump") {
     return await new Promise((resolve, reject) => {
       const yes = listeners.message(msg, {url:senderUrl}, resolve);
       if (yes !== true) reject(Error("listener not async"));
     });
   }
-  return {send, downloads, badges, seenState};
+  async function popup(kind) {
+    return new Promise((resolve, reject) => {
+      const yes = listeners.message(
+        {kind}, {url: "chrome-extension://test-extension/popup.html",
+                 id:"test-extension"}, resolve
+      );
+      if (yes !== true) reject(Error("popup listener not async"));
+    });
+  }
+  return {
+    send, popup, downloads, badges, seenState, alarms,
+    setFetch(fn) {nextFetch = fn;},
+    listeners,
+  };
 }
 
 const ACCOUNT = "107780257626128497";
@@ -102,4 +132,75 @@ test("Failed download stays retryable rather than marked seen", async () => {
   const result=await h.send({kind:"posts",posts:[next]});
   assert.equal(result.status,"TRANSFERRED");
   assert.equal(h.downloads.length,1);
+});
+
+
+test("Tab-free background request HTTP 200 enables periodic worker alarm", async () => {
+  const h=harness();
+  h.setFetch(async (url, options) => {
+    assert.equal(url, "https://truthsocial.com/api/v1/accounts/" +
+                 ACCOUNT + "/statuses?exclude_replies=true&limit=25");
+    assert.equal(options.credentials, "omit");
+    return {
+      ok:true, status:200, headers:{get() {return "8000";}},
+      async text() {return JSON.stringify([original]);}
+    };
+  });
+  const reply=await h.popup("background_test");
+  assert.equal(reply.status,"HTTP_200");
+  assert.equal(reply.enabled,true);
+  assert.equal(reply.count,1);
+  assert.equal(h.alarms.get("truth-social-public-posts").periodInMinutes,0.5);
+  assert.equal(h.badges.at(-1),"BG");
+  assert.equal(h.downloads.length,0); // baseline on first successful fetch
+  const state=await h.popup("background_status");
+  assert.equal(state.status,"HTTP_200");
+  assert.equal(state.enabled,true);
+  assert.ok(state.checked);
+  const off=await h.popup("background_off");
+  assert.equal(off.enabled,false);
+  assert.equal(h.alarms.size,0);
+});
+
+test("HTTP 403 fails closed; cannot claim background monitoring", async () => {
+  const h=harness();
+  h.setFetch(async () => ({
+    ok:false, status:403, headers:{get() {return "text/html";}}
+  }));
+  const result=await h.popup("background_test");
+  assert.equal(result.status,"HTTP_403");
+  assert.equal(result.enabled,false);
+  assert.equal(h.alarms.size,0);
+  assert.equal(h.badges.at(-1),"403");
+  // The first-party tab reader still works in legacy mode.
+  await h.send({kind:"health",status:"HTTP_200"});
+  assert.equal(h.badges.at(-1),"ON");
+});
+
+test("Background source without validated account data never enables", async () => {
+  const h=harness();
+  h.setFetch(async () => ({
+    ok:true, status:200, headers:{get() {return null;}},
+    async text() {return JSON.stringify([{
+      ...original, account:{id:"fake",acct:"notTrump"}
+    }]);}
+  }));
+  const result=await h.popup("background_test");
+  assert.equal(result.status,"ERROR");
+  assert.equal(result.enabled,false);
+  assert.equal(h.alarms.size,0);
+});
+
+test("Previously baselined tab data does not generate duplicate downloads", async () => {
+  const h=harness();
+  await h.send({kind:"posts",posts:[original]});
+  h.setFetch(async () => ({
+    ok:true,status:200,headers:{get() {return "1000";}},
+    async text() {return JSON.stringify([original]);}
+  }));
+  const r=await h.popup("background_test");
+  assert.equal(r.status,"HTTP_200");
+  assert.equal(h.downloads.length,0);
+  await h.send({kind:"health",status:"HTTP_200"});
+  assert.equal(h.badges.at(-1),"BG"); // tab success cannot masquerade as BG
 });

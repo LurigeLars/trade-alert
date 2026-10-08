@@ -47,6 +47,7 @@ jobs:
           node --check .\chrome_extension\reader.js
           node --check .\chrome_extension\relay.js
           node --check .\chrome_extension\background.js
+          node --check .\chrome_extension\popup.js
           node --test .\tests\test_chrome_extension.cjs
 
 

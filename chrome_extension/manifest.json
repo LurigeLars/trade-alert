@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Trade Alert – Chrome public feed (prototype)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local transfer of newly observed public account posts to Trade Alert, without cookies or network listener.",
   "permissions": [
     "downloads",
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://truthsocial.com/*"
@@ -36,6 +37,7 @@
     }
   ],
   "action": {
-    "default_title": "Trade Alert Chrome bridge: click to open account"
+    "default_title": "Trade Alert Chrome: visa källa och testa flikfri hämtning",
+    "default_popup": "popup.html"
   }
 }
