@@ -1,3 +1,4 @@
+import threading
 import unittest
 
 from trade_alert.config import Config
@@ -9,10 +10,26 @@ from trade_alert.tray import (
     normalize_news_link,
     resolve_theme,
     theme_palette,
+    TrayController,
 )
 
 
 class TrayTests(unittest.TestCase):
+    def test_latest_alerts_is_the_only_default_tray_action(self):
+        controller = TrayController.__new__(TrayController)
+        controller.config = Config()
+        controller.pause_event = threading.Event()
+        controller._unread_count = 0
+
+        menu = controller._build_menu()
+        defaults = [
+            item for item in menu.items
+            if getattr(item, "default", False)
+        ]
+
+        self.assertEqual(1, len(defaults))
+        self.assertEqual("Senaste alerts", defaults[0].text)
+
     def test_status_icons_are_runtime_generated_rgba_images(self):
         for health in ("ok", "waiting", "error", "paused"):
             image = make_status_icon(health)

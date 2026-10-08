@@ -88,7 +88,7 @@ On the first News Flow activation, older headlines are baselined so an upgrade d
 The tray menu exposes:
 
 - current source health;
-- **Latest alerts** / unread count;
+- **Latest alerts** / unread count; left-clicking the tray icon opens this view directly;
 - **What is monitored?** for the effective routing/profile configuration;
 - pause/resume;
 - test notification;
