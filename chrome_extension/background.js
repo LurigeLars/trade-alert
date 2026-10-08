@@ -78,7 +78,6 @@ async function ingest(posts) {
           : []
       });
     }
-    known.add(pid);
   }
   const downloaded = [];
   for (const post of eligible.slice(0, 12)) {
@@ -92,6 +91,7 @@ async function ingest(posts) {
         saveAs: false
       });
       downloaded.push(post.id);
+      known.add(post.id);
     } catch (err) {
       // Do not record unseen messages as handled after failed transfer.
       known.delete(post.id);
