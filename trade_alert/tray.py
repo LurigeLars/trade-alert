@@ -85,6 +85,8 @@ def monitoring_summary(
         f"  {dtv_context}\n"
         f"• Official TradingView symbol-news: SEKUNDÄR · targeted corroboration\n"
         f"  {symbols}\n"
+        f"• Trump's Truth RSS: {'konfigurerad tredjepartskälla' if config.truth_rss_enabled else 'avstängd'}\n"
+        f"  var {config.truth_rss_poll_seconds} s · arkivet uppdateras enligt egen uppgift med flera minuters intervall\n"
         f"• Policy hot path: {'lokalt aktiverad' if config.breaking_inbox_enabled else 'avstängd'}\n"
         f"  {len(config.breaking_authorized_sources)} godkända käll-ID:n; "
         f"{'ingen ansluten livekälla' if not config.breaking_authorized_sources else 'inbox-bevakning aktiv, upstream ej automatiskt verifierad'}\n\n"
