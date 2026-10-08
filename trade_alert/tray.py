@@ -85,6 +85,8 @@ def monitoring_summary(
         f"  {dtv_context}\n"
         f"• Official TradingView symbol-news: SEKUNDÄR · targeted corroboration\n"
         f"  {symbols}\n"
+        f"• Chrome lokal överföring: {'påslagen' if config.chrome_bridge_enabled else 'avstängd'}\n"
+        f"  läser enbart lokalt nedladdade filer; sidan måste vara öppen\n"
         f"• Direkt Truth Social: {'konfigurerad (åtkomst ej verifierad)' if config.truth_direct_enabled else 'avstängd'}\n"
         f"  var {config.truth_direct_poll_seconds} s; anonym offentlig API, stopp vid 401/403/429\n"
         f"• Trump's Truth RSS: {'konfigurerad tredjepartskälla' if config.truth_rss_enabled else 'avstängd'}\n"
