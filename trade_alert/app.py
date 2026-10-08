@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from .config import Config, app_dir
 from .breaking import poll_breaking_inbox
 from .truth_rss import RSSUnavailable, read_rss_once
-from .truth_direct import DirectUnavailable, read_direct_once
+from .truth_direct import DirectUnavailable, fetch_public_statuses, read_direct_once
 from .mcp_client import MCPToolError
 from .news import (
     DTVWatchlistContext,
@@ -350,7 +350,7 @@ async def _run_truth_direct_loop(
             if exc.blocked:
                 # Do not retry an access denial, and do not rotate identity/IP.
                 cooldown = 3600 if "429" not in str(exc) else 1800
-                logging.error("Direct source refused anonymous access: %s", exc)
+                logging.error("Direct source refused anonymous access: %s http=%s", exc, exc.diagnostic)
             else:
                 cooldown = min(600, cooldown * (2 ** errors))
                 logging.warning("Direct source unavailable: %s", exc)
@@ -423,6 +423,7 @@ def main() -> None:
     parser.add_argument("--once", action="store_true", help="Run one acquisition cycle and exit")
     parser.add_argument("--rss-once", action="store_true", help="Fetch and process independent Trump archive RSS once")
     parser.add_argument("--direct-once", action="store_true", help="Probe anonymous public Truth Social API once")
+    parser.add_argument("--diagnose-direct", action="store_true", help="Read-only, bounded HTTP diagnostics for the public Truth endpoint")
     parser.add_argument("--test-notification", action="store_true", help="Show a Windows test notification and exit")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--no-tray", action="store_true", help="Run the monitor in the foreground without a tray icon")
@@ -436,6 +437,17 @@ def main() -> None:
     if args.test_notification:
         if not notify("Trade Alert", "Testnotis fungerar."):
             raise SystemExit(1)
+        return
+
+    if args.diagnose_direct:
+        import json
+        try:
+            answer = fetch_public_statuses()
+            report = {"status": "AVAILABLE", "posts": len(answer.posts)}
+        except DirectUnavailable as exc:
+            report = {"status": "BLOCKED" if exc.blocked else "UNAVAILABLE",
+                      "reason": str(exc), "http": exc.diagnostic}
+        print(json.dumps(report, ensure_ascii=True, separators=(",", ":")))
         return
 
     store = StateStore()
