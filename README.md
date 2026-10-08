@@ -98,7 +98,7 @@ The tray menu exposes:
 
 Unread real alerts are stored in local SQLite. The tray icon keeps a persistent unread badge until the displayed alerts are marked read.
 
-The information windows support selection, `Ctrl+A`, `Ctrl+C`, **Copy all**, scrolling, system-aware light/dark mode, and Per-Monitor DPI Awareness V2 on Windows.
+The information windows support selection, `Ctrl+A`, `Ctrl+C`, **Copy all**, scrolling, system-aware light/dark mode, and Per-Monitor DPI Awareness V2 on Windows. News links in **Latest alerts** are rendered as clickable hyperlinks; TradingView-relative `/news/...` paths are resolved to `https://www.tradingview.com`, while non-HTTP(S) schemes are deliberately not made clickable.
 
 ## Quick start
 

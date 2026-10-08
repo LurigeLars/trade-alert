@@ -5,9 +5,11 @@ import ctypes
 import logging
 import os
 import threading
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from typing import Awaitable, Callable, Literal
+from urllib.parse import urljoin, urlsplit
 
 import pystray
 from PIL import Image, ImageDraw
@@ -111,6 +113,32 @@ def _local_timestamp(value: float | None) -> str:
         return "okänd"
 
 
+def normalize_news_link(value: str) -> str | None:
+    """Return a browser-safe HTTP(S) URL for an alert link.
+
+    TradingView News Flow commonly returns a site-relative /news/... path.
+    Other schemes are deliberately rejected because provider payloads are
+    untrusted external data.
+    """
+    raw = value.strip()
+    if not raw:
+        return None
+
+    if raw.startswith("/") and not raw.startswith("//"):
+        candidate = urljoin("https://www.tradingview.com/", raw)
+    else:
+        candidate = raw
+
+    try:
+        parsed = urlsplit(candidate)
+    except ValueError:
+        return None
+
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return None
+    return candidate
+
+
 def format_alert_history(alerts: list[AlertRecord], unread_count: int) -> str:
     if not alerts:
         return "Inga riktiga Trade Alert-signaler har registrerats ännu."
@@ -173,6 +201,8 @@ def theme_palette(theme: Theme) -> dict[str, str]:
             "button_active": "#3a3a3d",
             "selection": "#264f78",
             "selection_text": "#ffffff",
+            "link": "#4cc2ff",
+            "link_hover": "#60cdff",
         }
     return {
         "window": "#f6f6f6",
@@ -184,6 +214,8 @@ def theme_palette(theme: Theme) -> dict[str, str]:
         "button_active": "#dcdcdc",
         "selection": "#0078d4",
         "selection_text": "#ffffff",
+        "link": "#0067c0",
+        "link_hover": "#004578",
     }
 
 
@@ -269,6 +301,40 @@ def _show_text_window(title: str, text: str, theme_mode: str) -> None:
         for line_number, line in enumerate(text.splitlines(), start=1):
             if line.strip() in headings:
                 text_widget.tag_add("heading", f"{line_number}.0", f"{line_number}.end")
+
+        for link_number, line in enumerate(text.splitlines(), start=1):
+            if not line.startswith("Länk: "):
+                continue
+            raw_link = line[len("Länk: "):].strip()
+            browser_url = normalize_news_link(raw_link)
+            if browser_url is None:
+                continue
+
+            tag = f"hyperlink_{link_number}"
+            start = f"{link_number}.{len('Länk: ')}"
+            end = f"{link_number}.{len(line)}"
+            text_widget.tag_add(tag, start, end)
+            text_widget.tag_configure(
+                tag,
+                foreground=palette["link"],
+                underline=True,
+            )
+
+            def open_link(_event, url=browser_url):
+                webbrowser.open_new_tab(url)
+                return "break"
+
+            def link_enter(_event, name=tag):
+                text_widget.configure(cursor="hand2")
+                text_widget.tag_configure(name, foreground=palette["link_hover"])
+
+            def link_leave(_event, name=tag):
+                text_widget.configure(cursor="xterm")
+                text_widget.tag_configure(name, foreground=palette["link"])
+
+            text_widget.tag_bind(tag, "<Button-1>", open_link)
+            text_widget.tag_bind(tag, "<Enter>", link_enter)
+            text_widget.tag_bind(tag, "<Leave>", link_leave)
 
         text_widget.configure(state="disabled")
 

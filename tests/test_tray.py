@@ -6,6 +6,7 @@ from trade_alert.tray import (
     format_alert_history,
     make_status_icon,
     monitoring_summary,
+    normalize_news_link,
     resolve_theme,
     theme_palette,
 )
@@ -69,6 +70,22 @@ class TrayTests(unittest.TestCase):
             self.assertIn("selection", palette)
             self.assertNotEqual(palette["surface"], palette["text"])
             self.assertNotEqual(palette["selection"], palette["selection_text"])
+
+    def test_news_link_normalization_accepts_https_and_tradingview_relative_paths(self):
+        self.assertEqual(
+            "https://example.test/story",
+            normalize_news_link("https://example.test/story"),
+        )
+        self.assertEqual(
+            "https://www.tradingview.com/news/reuters.com,2026:newsml_TEST/",
+            normalize_news_link("/news/reuters.com,2026:newsml_TEST/"),
+        )
+
+    def test_news_link_normalization_rejects_untrusted_schemes(self):
+        self.assertIsNone(normalize_news_link("javascript:alert(1)"))
+        self.assertIsNone(normalize_news_link("file:///C:/secret.txt"))
+        self.assertIsNone(normalize_news_link("//example.test/story"))
+        self.assertIsNone(normalize_news_link(""))
 
     def test_alert_history_keeps_full_headline_and_link(self):
         record = AlertRecord(
