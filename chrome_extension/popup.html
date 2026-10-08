@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trade Alert</title>
+<style>
+  body { font: 13px system-ui,sans-serif; background:#121926; color:#f2f5fa; margin:0; padding:16px; width:308px; }
+  h1 {font-size:16px;margin:0 0 12px;}
+  p {line-height:1.5;color:#c6d0df;}
+  .status {border:1px solid #526275;border-radius:8px;padding:10px;margin-bottom:12px;white-space:pre-wrap;}
+  button {display:block;width:100%;font:inherit;text-align:left;padding:10px;margin:8px 0;border:1px solid #5e758e;border-radius:7px;background:#24374b;color:white;cursor:pointer;}
+  button:disabled {opacity:.5;cursor:default;}
+  .note {font-size:12px;}
+</style>
+</head>
+<body>
+<h1>Trade Alert · Trump-flöde</h1>
+<div id="status" class="status" role="status">Kontrollerar tillägget…</div>
+<button id="test">Testa och aktivera utan flik</button>
+<button id="off">Stäng av bakgrundsläge</button>
+<button id="open">Öppna kontoflik (reserv)</button>
+<p class="note">BG betyder att bakgrundsanropet lyckades. Chrome måste vara igång. Om det står 403 behåller du den fungerande flikbaserade metoden.</p>
+<script src="popup.js"></script>
+</body></html>
