@@ -240,7 +240,12 @@ def _apply_windows_titlebar_theme(root, *, dark: bool) -> None:
         logging.debug("Could not apply Windows title-bar theme", exc_info=True)
 
 
-def _show_text_window(title: str, text: str, theme_mode: str) -> None:
+def _show_text_window(
+    title: str,
+    text: str,
+    theme_mode: str,
+    app_icon: Image.Image | None = None,
+) -> None:
     """Open a selectable, copyable information window using the effective theme."""
     if os.name != "nt":
         logging.info("%s\n%s", title, text)
@@ -248,12 +253,17 @@ def _show_text_window(title: str, text: str, theme_mode: str) -> None:
 
     def run_window() -> None:
         import tkinter as tk
+        from PIL import ImageTk
 
         theme = resolve_theme(theme_mode)
         palette = theme_palette(theme)
 
         root = tk.Tk()
         root.title(title)
+        if app_icon is not None:
+            # Keep a reference for the lifetime of this Tk interpreter.
+            root._trade_alert_icon = ImageTk.PhotoImage(app_icon)  # type: ignore[attr-defined]
+            root.iconphoto(True, root._trade_alert_icon)  # type: ignore[attr-defined]
         root.geometry("860x680")
         root.minsize(620, 420)
         root.configure(bg=palette["window"])
@@ -581,7 +591,12 @@ class TrayController:
             resolved_watchlist_name=cached_name,
             auto_pinned_watchlist=bool(cached_id and not self.config.dtv_watchlist_id),
         )
-        _show_text_window("Trade Alert · Vad bevakas?", text, self.config.theme_mode)
+        _show_text_window(
+            "Trade Alert · Vad bevakas?",
+            text,
+            self.config.theme_mode,
+            make_status_icon(self._health, self._unread_count),
+        )
 
     def _show_alert_history(self, _icon, _item) -> None:
         store = StateStore()
@@ -595,7 +610,12 @@ class TrayController:
             store.close()
 
         self._refresh_tray()
-        _show_text_window("Trade Alert · Senaste alerts", text, self.config.theme_mode)
+        _show_text_window(
+            "Trade Alert · Senaste alerts",
+            text,
+            self.config.theme_mode,
+            make_status_icon(self._health, self._unread_count),
+        )
 
     def _test_notification(self, _icon, _item) -> None:
         previous_status = self._status
