@@ -17,6 +17,36 @@ class StateTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_existing_alerts_seed_cross_source_seen_identity_on_reopen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "state.db"
+            source = "TV:ICEEUR:BRN1!"
+            item_id = "te_news:590623:0"
+            item_key = f"{source}:{item_id}"
+
+            store = StateStore(path)
+            try:
+                store.mark_seen(item_key, at=100.0)
+                store.record_alert(
+                    item_key=item_key,
+                    source=source,
+                    provider="Trading Economics",
+                    headline="Brent Eases on Trump remarks about Iran",
+                    body="body",
+                    score=3,
+                    published=90.0,
+                    at=100.0,
+                )
+                self.assertFalse(store.seen_item(item_id))
+            finally:
+                store.close()
+
+            reopened = StateStore(path)
+            try:
+                self.assertTrue(reopened.seen_item(item_id))
+            finally:
+                reopened.close()
+
     def test_alert_history_persists_unread_and_marks_only_selected_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StateStore(pathlib.Path(tmp) / "state.db")
