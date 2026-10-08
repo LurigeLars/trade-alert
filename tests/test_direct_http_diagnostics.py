@@ -1,10 +1,12 @@
 """Test bounded HTTP-denial evidence and no stateful side effects."""
 import io
 import json
+import sys
 import unittest
 import urllib.error
 from email.message import Message
 from unittest.mock import patch
+from trade_alert.truth_direct import DirectResult
 
 from trade_alert.truth_direct import DirectUnavailable, fetch_public_statuses
 
@@ -93,6 +95,29 @@ class DirectHttpDiagnosticTests(unittest.TestCase):
         e = self._probe(simulated_denial(code=429))
         self.assertTrue(e.blocked)
         self.assertEqual(e.diagnostic["http_status"], 429)
+
+
+    def test_diagnostic_cli_is_read_only_and_does_not_log_body(self):
+        from trade_alert.app import main
+        blocked = DirectUnavailable(
+            "HTTP 403 from Truth Social public endpoint",
+            blocked=True,
+            diagnostic={"http_status": 403, "classification": "CLOUDFLARE_CHALLENGE"},
+        )
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["trade-alert", "--diagnose-direct"]), \
+             patch("trade_alert.app.configure_windows_app_identity"), \
+             patch("trade_alert.app.configure_windows_dpi_awareness"), \
+             patch("trade_alert.app._setup_logging"), \
+             patch("trade_alert.app.fetch_public_statuses", side_effect=blocked), \
+             patch("trade_alert.app.Config.load"), \
+             patch("trade_alert.app.StateStore", side_effect=AssertionError("must not access store")), \
+             patch("sys.stdout", output):
+            main()
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertEqual(report["http"]["classification"], "CLOUDFLARE_CHALLENGE")
+        self.assertNotIn("password", output.getvalue())
 
 
 if __name__ == "__main__":
