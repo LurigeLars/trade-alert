@@ -17,5 +17,8 @@
   "breaking_inbox_enabled": true,
   "breaking_poll_seconds": 1,
   "breaking_max_age_seconds": 300,
-  "breaking_authorized_sources": []
+  "breaking_authorized_sources": [],
+  "truth_rss_enabled": true,
+  "truth_rss_poll_seconds": 30,
+  "truth_rss_max_age_seconds": 900
 }
