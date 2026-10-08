@@ -98,6 +98,8 @@ def parse_statuses(data: bytes, *, fetched_at: float) -> DirectResult:
         raise DirectUnavailable("Public endpoint did not return valid JSON") from exc
     if not isinstance(rows, list):
         raise DirectUnavailable("Public endpoint response is not a statuses array")
+    if not rows:
+        raise DirectUnavailable("Public endpoint returned no statuses; using RSS fallback")
     if len(rows) > 100:
         raise DirectUnavailable("Unexpected oversized status list")
     output: list[DirectPost] = []
