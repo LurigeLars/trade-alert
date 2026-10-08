@@ -151,7 +151,7 @@ test("Tab-free background request HTTP 200 enables periodic worker alarm", async
   assert.equal(reply.enabled,true);
   assert.equal(reply.count,1);
   assert.equal(h.alarms.get("truth-social-public-posts").periodInMinutes,0.5);
-  assert.equal(h.badges.at(-1),"BG");
+  assert.equal(h.badges.at(-1),"ON");
   assert.equal(h.downloads.length,0); // baseline on first successful fetch
   const state=await h.popup("background_status");
   assert.equal(state.status,"HTTP_200");
@@ -202,5 +202,5 @@ test("Previously baselined tab data does not generate duplicate downloads", asyn
   assert.equal(r.status,"HTTP_200");
   assert.equal(h.downloads.length,0);
   await h.send({kind:"health",status:"HTTP_200"});
-  assert.equal(h.badges.at(-1),"BG"); // tab success cannot masquerade as BG
+  assert.equal(h.badges.at(-1),"ON"); // tab success does not change background status
 });

@@ -1,25 +1,92 @@
 <!doctype html>
-<html lang="sv">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trade Alert</title>
+<title>Trade Alert · Trump Monitor</title>
 <style>
-  body { font: 13px system-ui,sans-serif; background:#121926; color:#f2f5fa; margin:0; padding:16px; width:308px; }
-  h1 {font-size:16px;margin:0 0 12px;}
-  p {line-height:1.5;color:#c6d0df;}
-  .status {border:1px solid #526275;border-radius:8px;padding:10px;margin-bottom:12px;white-space:pre-wrap;}
-  button {display:block;width:100%;font:inherit;text-align:left;padding:10px;margin:8px 0;border:1px solid #5e758e;border-radius:7px;background:#24374b;color:white;cursor:pointer;}
-  button:disabled {opacity:.5;cursor:default;}
-  .note {font-size:12px;}
+  :root {
+    color-scheme: dark;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 13px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    width: 320px;
+    min-height: 440px;
+    padding: 16px;
+    margin: 0;
+    color: #f6f9ff;
+    /* The account's public portrait also appears in the user-provided artwork.
+       The first color/gradient remain as fallback if the CDN is unavailable. */
+    background-color: #111a29;
+    background-image:
+      linear-gradient(180deg, rgba(8,16,29,.37), rgba(8,16,29,.48) 48%, rgba(7,12,21,.65)),
+      url("https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/accounts/avatars/107/780/257/626/128/497/original/454286ac07a6f6e6.jpeg");
+    background-size: cover;
+    background-position: center center;
+    background-attachment: fixed;
+  }
+  h1, .status, .note {
+    background: rgba(10, 21, 36, .88);
+    border: 1px solid rgba(151, 185, 220, .55);
+    box-shadow: 0 4px 14px rgba(0,0,0,.38);
+    border-radius: 12px;
+    backdrop-filter: blur(3px);
+  }
+  h1 {
+    display: table;
+    max-width: 100%;
+    padding: 9px 10px;
+    margin: 0 0 16px;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.32;
+    text-shadow: 0 1px 2px #070a11;
+  }
+  .status {
+    padding: 12px 13px;
+    min-height: 90px;
+    margin-bottom: 16px;
+    white-space: pre-wrap;
+    line-height: 1.65;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  button {
+    display: block;
+    width: 100%;
+    padding: 13px 12px;
+    margin: 9px 0;
+    border: 1px solid rgba(158,195,232,.72);
+    border-radius: 11px;
+    background: rgba(28, 48, 72, .89);
+    color: #fff;
+    font: 600 13px system-ui, sans-serif;
+    text-align: left;
+    box-shadow: 0 4px 13px rgba(0,0,0,.3);
+    text-shadow: 0 1px 1px rgba(0,0,0,.35);
+    cursor: pointer;
+  }
+  button:hover { background: rgba(45, 74, 107, .94); }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  button:disabled { opacity: .6; cursor: wait; }
+  .note {
+    padding: 11px 12px;
+    margin: 17px 0 0;
+    color: #eef2fb;
+    font-size: 12px;
+    line-height: 1.55;
+  }
 </style>
 </head>
 <body>
-<h1>Trade Alert · Trump-flöde</h1>
-<div id="status" class="status" role="status">Kontrollerar tillägget…</div>
-<button id="test">Testa och aktivera utan flik</button>
-<button id="off">Stäng av bakgrundsläge</button>
-<button id="open">Öppna kontoflik (reserv)</button>
-<p class="note">BG betyder att bakgrundsanropet lyckades. Chrome måste vara igång. Om det står 403 behåller du den fungerande flikbaserade metoden.</p>
+<h1>Trade Alert · Trump Monitor</h1>
+<div id="status" class="status" role="status" aria-live="polite">Checking monitor status…</div>
+<button id="test" type="button">Activate Trump Monitor</button>
+<button id="off" type="button">Disable Trump Monitor</button>
+<button id="open" type="button">Backup Monitor</button>
+<p class="note">ON means background monitoring is responding. Keep Chrome running. If the monitor reports 403, use Backup Monitor to open the account tab.</p>
 <script src="popup.js"></script>
-</body></html>
+</body>
+</html>

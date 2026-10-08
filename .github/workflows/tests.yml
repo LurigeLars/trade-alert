@@ -50,6 +50,7 @@ jobs:
           node --check .\chrome_extension\popup.js
           node --test .\tests\test_chrome_extension.cjs
           node --test .\tests\test_chrome_relay.cjs
+          node --test .\tests\test_chrome_popup.cjs
 
 
       - name: PowerShell syntax

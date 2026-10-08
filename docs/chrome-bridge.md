@@ -56,6 +56,23 @@ Do not test by manipulating public source timestamps or sending fake live
 posts into production alert history. Python unit tests exercise ingestion
 with synthetic data in temporary databases.
 
+## Trump Monitor popup design (version 0.2.1)
+
+The popup interface is in English and uses the public portrait avatar from
+Truth Social as a visual backdrop, layered beneath dark translucent panels
+for readable status, buttons and help text. Its host is
+`static-assets-1.truthsocial.com`. The portrait is referenced as a public
+image URL, **not bundled into the extension**, so if the CDN cannot be
+reached the popup retains a dark background fallback. No additional
+permissions, remote scripts or tracking calls are introduced.
+
+The controls are **Activate Trump Monitor**, **Disable Trump Monitor**,
+and **Backup Monitor**. The latter still opens the same first-party
+account tab. A successful background poll shows badge **ON** (previously
+**BG**); denied and failed requests continue to display **403** and
+**ERR**. These are UI-only changes: account verification, polling,
+local notifications and existing source cursors remain unchanged.
+
 ## Optional tab-free test (Chrome MV3 background service worker)
 
 Starting with extension version 0.2.0, click the extension icon to open its

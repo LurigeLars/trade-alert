@@ -7,29 +7,29 @@ async function call(kind) {
 }
 function show(response) {
   if (!response) {
-    el.textContent = "Inget svar från tillägget.";
+    el.textContent = "No response from the extension.";
     return;
   }
   const label = response.status || "NOT_TESTED";
   const enabled = response.enabled === true;
   el.textContent =
-    "Bakgrundsläge: " + (enabled ? "PÅ" : "AV") +
-    "\nSenaste status: " + label +
-    (Number.isFinite(response.count) ? "\nVerifierade inlägg: " + response.count : "") +
-    (response.checked ? "\nSenast kontrollerad: " +
-      new Date(response.checked).toLocaleTimeString("sv-SE") : "");
+    "Background monitor: " + (enabled ? "ON" : "OFF") +
+    "\nLast status: " + label +
+    (Number.isFinite(response.count) ? "\nVerified posts: " + response.count : "") +
+    (response.checked ? "\nLast checked: " +
+      new Date(response.checked).toLocaleTimeString("en-GB") : "");
 }
 async function action(kind) {
   buttons.forEach(b => {b.disabled = true;});
   el.textContent = kind === "background_test"
-    ? "Gör ett direkt test utan kontoflik…"
-    : "Uppdaterar…";
+    ? "Testing background access…"
+    : "Updating…";
   try {
     const response = await call(kind);
     if (kind === "open_tab") window.close();
     else show(response);
   } catch {
-    el.textContent = "Kunde inte kommunicera med tillägget.";
+    el.textContent = "Could not communicate with the extension.";
   } finally {
     buttons.forEach(b => {b.disabled = false;});
   }
