@@ -55,6 +55,27 @@ means the endpoint refused anonymous access: leave the RSS fallback in place.
 A successful test is a point-in-time connectivity result, not proof of
 15-second publication-to-alert latency.
 
+## Safe HTTP denial diagnostics
+
+To distinguish a possible Cloudflare challenge, WAF block, geographic
+restriction, authentication requirement or an unexplained 403, run:
+
+    & .\.venv\Scripts\python.exe -m trade_alert --diagnose-direct
+
+This command does not use StateStore or create Windows notifications.
+For HTTP failures it displays only: status code, classification,
+sanitized Server/Content-Type/CF-Ray/cf-mitigated headers, request time in
+milliseconds and number of response bytes inspected (at most 4096).
+It never prints, logs or persists the HTML/JSON body, cookies, tokens,
+request headers or an IP address. Headers are bounded and CRLF-truncated.
+CF-Ray or Server: cloudflare is not sufficient alone to conclude that a
+bot challenge caused a refusal. Classifications are diagnostic clues,
+not a definitive determination of access rights or blocking policy.
+
+The background monitor logs the same limited diagnostic metadata upon
+access refusal and retains the existing long cooldown. It does not
+cycle proxies or retry through another identity.
+
 Measure:
 - source post UTC created_at
 - first successful fetch time (local)

@@ -39,9 +39,61 @@ POLICY = re.compile(
 
 
 class DirectUnavailable(RuntimeError):
-    def __init__(self, reason: str, *, blocked: bool = False):
+    def __init__(self, reason: str, *, blocked: bool = False,
+                 diagnostic: dict | None = None):
         super().__init__(reason)
         self.blocked = blocked
+        self.diagnostic = diagnostic or {}
+
+
+def _safe_header(value: object, *, limit: int = 100) -> str | None:
+    if not isinstance(value, str):
+        return None
+    # CR/LF must never turn extra response headers into a log field.
+    first_line = value.splitlines()[0] if value.splitlines() else ""
+    clean = "".join(ch for ch in first_line[:limit] if ch.isascii()
+                    and (ch.isalnum() or ch in " .;/=_-"))
+    return clean or None
+
+
+def _classify_denial(status: int, headers, sample: bytes, elapsed_ms: int) -> dict:
+    """Return only allowlisted metadata and a coarse reason; never raw HTML."""
+    server = _safe_header(headers.get("Server"))
+    content_type = _safe_header(headers.get("Content-Type"))
+    cf_ray = _safe_header(headers.get("CF-Ray"))
+    cf_mitigated = _safe_header(headers.get("cf-mitigated"))
+    body = sample.decode("utf-8", errors="replace").lower()
+    if cf_mitigated and cf_mitigated.lower() == "challenge":
+        reason = "CLOUDFLARE_CHALLENGE"
+    elif any(t in body for t in (
+        "not available in your country", "not available in your region",
+        "unavailable in your country", "unavailable in your region",
+        "geographic restriction", "geoblocked", "geo-blocked"
+    )):
+        reason = "POSSIBLE_GEOGRAPHIC_RESTRICTION"
+    elif any(t in body for t in ("error 1020", "error code 1020", "error code: 1020")):
+        reason = "CLOUDFLARE_WAF_1020"
+    elif status == 401 or (
+        content_type and "json" in content_type.lower()
+        and any(t in body for t in (
+            "authentication required", "unauthorized", "missing token"
+        ))
+    ):
+        reason = "POSSIBLE_AUTHENTICATION_REQUIREMENT"
+    elif cf_ray or (server and "cloudflare" in server.lower()):
+        reason = "CLOUDFLARE_PRESENT_CAUSE_UNDETERMINED"
+    else:
+        reason = "ACCESS_DENIED_CAUSE_UNDETERMINED"
+    return {
+        "http_status": int(status),
+        "classification": reason,
+        "server": server,
+        "content_type": content_type,
+        "cf_ray": cf_ray,
+        "cf_mitigated": cf_mitigated,
+        "elapsed_ms": max(0, int(elapsed_ms)),
+        "inspected_body_bytes": len(sample),
+    }
 
 
 class _Text(HTMLParser):
@@ -152,13 +204,24 @@ def fetch_public_statuses(*, timeout: float = 6.0) -> DirectResult:
     }
     request = urllib.request.Request(STATUSES_URL, headers=headers)
     opener = urllib.request.build_opener(_NoRedirect)
+    started = time.monotonic()
     try:
         with opener.open(request, timeout=timeout) as response:
             data = response.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as exc:
         blocked = exc.code in (401, 403, 429)
+        # Bounded inspection; never retain/print the HTTP response body.
+        try:
+            sample = exc.read(4096)
+        except (AttributeError, OSError, ValueError):
+            sample = b""
+        metadata = _classify_denial(
+            exc.code, exc.headers or {}, sample,
+            int((time.monotonic() - started) * 1000),
+        )
         raise DirectUnavailable(
-            f"HTTP {exc.code} from Truth Social public endpoint", blocked=blocked
+            f"HTTP {exc.code} from Truth Social public endpoint",
+            blocked=blocked, diagnostic=metadata,
         ) from exc
     except DirectUnavailable:
         raise
