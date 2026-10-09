@@ -11,14 +11,18 @@ It continuously reads bounded news feeds, applies deterministic relevance rules,
 
 A [direct public Truth Social reader](docs/truth-direct.md) checks the anonymous public JSON endpoint for the verified Trump account every 15 seconds when reachable, with failure backoff and RSS as a fallback. Availability must be verified from the Windows host; it never logs in or evades access restrictions.
 
-An optional [local Chrome bridge prototype](docs/chrome-bridge.md) transfers newly
-observed posts through Chrome's own Downloads folder into Trade Alert's unread
-alert history. It is disabled by default and must be explicitly installed in
-Chrome. Extension v0.2.1 offers an opt-in **tab-free MV3 background-fetch probe**
-via its popup; this mode is enabled only after its own HTTP 200/account
-verification and uses a 30-second Chrome alarm. A successful normal-tab fetch
-does not imply this tab-free request will pass Cloudflare. No proxy rotation,
-browser debugging port or cookie export.
+An optional [local Chrome bridge](docs/chrome-bridge.md) transfers newly
+observed posts from Chrome to the Windows app via a **silent localhost
+HTTP POST** on 127.0.0.1:18761. Extension v0.3.0 no longer uses Chrome
+downloads, so new posts cannot trigger repetitive Save As prompts.
+Its receiver binds only to 127.0.0.1, validates public account identity,
+and atomically queues posts for the existing local alert scanner.
+The bridge is opt-in (chrome_bridge_enabled) and runs only when the Windows
+tray application is active. The optional tab-free Chrome MV3 fetch probes
+Truth Social every ~30 seconds when enabled. This source may still receive
+HTTP 403 or 429; the silent local relay does not alter source access,
+timeouts or rate limits. No browser cookies, credentials, proxy rotation
+or debugging-port access are involved.
 The Chrome popup is English-only, shows **ON** for a successful background
 poll, and uses the public portrait avatar with dark readable overlays and a
 dark fallback if the image CDN is unavailable.

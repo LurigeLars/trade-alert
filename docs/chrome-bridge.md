@@ -16,19 +16,30 @@ cookies, tokens or browser profiles and does not change IP addresses.
 2. The extension validates public-account identity and post ID and stores a
    bounded cursor in chrome.storage.local. Its **first successful fetch
    establishes the baseline without any downloads or alerts**.
-3. Later new posts (up to five minutes old) are downloaded as JSON under the
-   browser's default Downloads/TradeAlertChrome directory. No local HTTP
-   listener, PowerShell execution, secret exchange or native messaging.
-4. Trade Alert reads downloaded files approximately once per second, validates
-   account ID, handle, public visibility, post ID and timestamp again, then
-   applies existing relevance scoring and deduplication to its local SQLite
-   alert history and Windows notifications.
+3. Later new posts (up to five minutes old) are transferred by a POST to
+   **127.0.0.1:18761/chrome-post**. There is no use of Chrome's downloads API,
+   no Save As prompt and no public inbound network listener.
+4. Trade Alert's Windows process listens only on IPv4 loopback and accepts
+   the POST only with an extension Origin, exact path, JSON content type,
+   fixed header and a bounded body. It validates public account identity,
+   atomically writes the post into the existing internal Chrome inbox and
+   acknowledges the exact post ID. The same one-second file scanner then
+   independently validates, scores and deduplicates posts before saving
+   unread alerts and delivering Windows notifications.
+5. If the local app is offline, the extension records BRIDGE_OFFLINE and
+   **does not mark the post as delivered**. It retries on subsequent fetches
+   while the post remains fresh. It never falls back to user-visible downloads.
 
 This is an **opt-in prototype**. There is no way to claim it is always-on or
 reliable when Chrome or the relevant tab is closed. Background tabs can be
 throttled and suspended, exceeding the nominal 30-second interval.
-A Chrome download folder outside the standard user Downloads path will require
-a future explicit folder configuration or moving the files.
+The loopback server still uses the existing internal
+\`~/Downloads/TradeAlertChrome\` directory to hand records to the scanner,
+but files are created by the Windows app, never downloaded by Chrome.
+Chrome's default download directory and "Ask where to save" settings no
+longer matter. The folder is not a long-term archive: the scanner deletes
+files after handling them. Legacy files from the old extension may still
+be consumed after upgrade if they remain in the normal directory.
 
 ## Installing on Windows after merging
 
@@ -43,20 +54,27 @@ a future explicit folder configuration or moving the files.
 4. Click the extension icon to open https://truthsocial.com/@realDonaldTrump.
    Leave the account tab open and confirm the extension badge shows ON
    after a successful first-party fetch. A 403/ERR badge means no live data.
-5. Chrome downloads files into its configured default Downloads directory.
-   With default Chrome settings, the directory is
-   C:\Users\<user>\Downloads\TradeAlertChrome.
-   If Chrome prompts to choose a location, select the normal Downloads folder.
-6. A fresh new market-relevant post should create an unread alert in the
+5. Restart the Windows Trade Alert tray process so its loopback receiver
+   starts. Check its log for "Chrome loopback inbox listening at
+   127.0.0.1:18761". The receiver starts only when the existing
+   chrome_bridge_enabled flag is true; no LAN or firewall port is opened.
+6. Reload the unpacked Chrome extension at chrome://extensions after
+   updating this code to version 0.3.0. Chrome may ask you once to approve
+   new local host permissions. No per-post download approval is required.
+7. Open the extension popup. "Local delivery: NOT_TESTED" is expected until
+   a new post is handed off; "QUEUED" means a validated post was accepted
+   into the local inbox; "BRIDGE_OFFLINE" means the Windows app is not
+   reachable and the extension will retry while the post remains fresh.
+8. A fresh new market-relevant post should create an unread alert in the
    Trade Alert window and a Windows toast. Nonmarket posts may be transferred
-   but must not cause a market alert. Verify publication, Chrome observation
-   and Trade Alert receipt latencies using an actual future post.
+   but must not cause a market alert. Verify actual end-to-end latency with
+   a real new post rather than a mocked historical event.
 
 Do not test by manipulating public source timestamps or sending fake live
 posts into production alert history. Python unit tests exercise ingestion
 with synthetic data in temporary databases.
 
-## Trump Monitor popup design (version 0.2.1)
+## Trump Monitor popup design (from version 0.2.1)
 
 The popup interface is in English and uses the public portrait avatar from
 Truth Social as a visual backdrop, layered beneath dark translucent panels
@@ -164,6 +182,39 @@ previous badges cannot persist indefinitely.
 The 120-second source freshness heuristic describes the latest observed
 poll, not end-to-end Windows alert delivery. The latter still requires a
 real new post for end-to-end verification.
+
+
+## Silent loopback delivery (version 0.3.0)
+
+The old Chrome downloads bridge is deprecated. The Chrome browser's
+per-file Save As setting may override the historical saveAs:false flag, so
+it cannot reliably support unattended monitoring. We now deliver
+verified public posts to a **loopback-only local server** started by the
+Windows Trade Alert process when chrome_bridge_enabled is true.
+
+- URL: http://127.0.0.1:18761/chrome-post (fixed).
+- Permission: only http://127.0.0.1/* is added; the downloads permission is
+  removed. Do not change this to a LAN or public bind.
+- Origin: an installed Chrome extension
+  (chrome-extension://<32-letter-Chrome-ID>).
+- Method: POST, Content-Type: application/json,
+  X-Trade-Alert-Bridge: 1; body capped at 16,384 bytes.
+- Response: {"status":"QUEUED","id":"<validated-post-id>"}; the client
+  marks the post seen only on a matching acknowledgement.
+- The existing Python inbox validation and Windows notification logic are
+  unchanged. This is *not* a cryptographically authenticated sender; post
+  contents remain untrusted, and the fixed account identity is checked by
+  both the HTTP handler and the file scanner. Local software could still
+  impersonate this data, as with the previous Downloads folder.
+- A source HTTP 200 indicates the feed works, not that Windows received a
+  post. The popup exposes independent **Local delivery** status.
+- When the Windows app is stopped or the socket cannot be opened, the
+  extension never silently discards the current new post and never opens a
+  Chrome save dialog; it may stop retrying after the five-minute freshness
+  window expires.
+
+Never ask users to disable Chrome's global download safety preferences just
+to run Trade Alert.
 
 ## Security and reliability limits
 

@@ -26,6 +26,9 @@ function show(response) {
     (response.tab_checked ? "\nLast tab status: " + response.tab_status +
       " (" + new Date(response.tab_checked).toLocaleTimeString("en-GB") + ")" : "") +
     (Number.isFinite(response.count) ? "\nVerified posts: " + response.count : "") +
+    "\nLocal delivery: " + (response.delivery_status || "NOT_TESTED") +
+    (response.delivery_checked ? " (" +
+      new Date(response.delivery_checked).toLocaleTimeString("en-GB") + ")" : "") +
     (cooldown ? "\nRate limited: paused until " +
         new Date(response.cooldown_until).toLocaleTimeString("en-GB")
       : "");

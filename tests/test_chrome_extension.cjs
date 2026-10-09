@@ -9,7 +9,8 @@ const path = require("node:path");
 function harness() {
   const listeners = {};
   const seenState = {};
-  const downloads = [];
+  const transfers = [];
+  let bridgeAvailable = true;
   const badges = [];
   const alarms = new Map();
   let nextFetch = async () => {throw Error("No mocked background fetch");};
@@ -34,12 +35,6 @@ function harness() {
       },
       async set(values) { Object.assign(seenState, values); }
     }},
-    downloads: {
-      async download(options) {
-        downloads.push(options);
-        return downloads.length;
-      }
-    },
     action: {
       async setBadgeText(x) {badges.push(x.text);},
       async setBadgeBackgroundColor() {},
@@ -53,7 +48,19 @@ function harness() {
   );
   vm.runInNewContext(code, {
     chrome, console, URL, Date, Set,
-    fetch: (...args) => nextFetch(...args),
+    fetch: (url, options) => {
+      if (url === "http://127.0.0.1:18761/chrome-post") {
+        transfers.push({url, options});
+        if (!bridgeAvailable) return Promise.reject(Error("local app stopped"));
+        return Promise.resolve({
+          ok: true, status: 200,
+          async json() {
+            return {status:"QUEUED",id:JSON.parse(options.body).id};
+          }
+        });
+      }
+      return nextFetch(url, options);
+    },
     AbortSignal,
   }, {filename:"background.js"});
   async function send(msg, senderUrl="https://truthsocial.com/@realDonaldTrump") {
@@ -72,7 +79,8 @@ function harness() {
     });
   }
   return {
-    send, popup, downloads, badges, seenState, alarms,
+    send, popup, transfers, badges, seenState, alarms,
+    setBridgeAvailable(value) {bridgeAvailable = value;},
     setFetch(fn) {nextFetch = fn;},
     listeners,
   };
@@ -91,20 +99,21 @@ test("Initial fetch baselines and new posts transfer exactly once", async () => 
   const h = harness();
   const a = await h.send({kind:"posts",posts:[original]});
   assert.equal(a.status,"BASELINED");
-  assert.equal(h.downloads.length,0);
+  assert.equal(h.transfers.length,0);
   const next = {...original,id:"117406359223020085"};
   const b = await h.send({kind:"posts",posts:[next, original]});
   assert.equal(b.count,1);
-  assert.equal(h.downloads.length,1);
-  assert.match(h.downloads[0].filename,/^TradeAlertChrome\/post-[0-9]+\.json$/);
-  const payload = JSON.parse(decodeURIComponent(
-    h.downloads[0].url.slice(h.downloads[0].url.indexOf(",")+1)
-  ));
+  assert.equal(h.transfers.length,1);
+  assert.equal(h.transfers[0].url, "http://127.0.0.1:18761/chrome-post");
+  assert.equal(h.transfers[0].options.method, "POST");
+  assert.equal(h.transfers[0].options.credentials, "omit");
+  assert.equal(h.transfers[0].options.headers["X-Trade-Alert-Bridge"], "1");
+  const payload = JSON.parse(h.transfers[0].options.body);
   assert.equal(payload.account.id,ACCOUNT);
   assert.equal(payload.id,next.id);
   assert.ok(!("cookie" in payload) && !("token" in payload));
   await h.send({kind:"posts",posts:[next, original]});
-  assert.equal(h.downloads.length,1);
+  assert.equal(h.transfers.length,1);
 });
 
 test("Reject spoofing and unapproved web origins", async () => {
@@ -114,7 +123,7 @@ test("Reject spoofing and unapproved web origins", async () => {
   await h.send({kind:"posts",posts:[wrong]});
   await h.send({kind:"posts",posts:[{...original,id:"117406359223020085"}]},
                "https://example.com/");
-  assert.equal(h.downloads.length,0);
+  assert.equal(h.transfers.length,0);
 });
 
 test("HTTP refused reports status without retry on behalf of the background worker", async () => {
@@ -124,14 +133,23 @@ test("HTTP refused reports status without retry on behalf of the background work
   assert.equal(h.badges.at(-1),"403");
 });
 
-test("Failed download stays retryable rather than marked seen", async () => {
+test("Failed local transfer is retried and no browser download occurs", async () => {
   const h=harness();
   await h.send({kind:"posts",posts:[original]});
-  // The harness download succeeds; simulate one full message afterward.
   const next = {...original,id:"117406359223020085"};
-  const result=await h.send({kind:"posts",posts:[next]});
-  assert.equal(result.status,"TRANSFERRED");
-  assert.equal(h.downloads.length,1);
+  h.setBridgeAvailable(false);
+  const failed=await h.send({kind:"posts",posts:[next]});
+  assert.equal(failed.status,"BRIDGE_OFFLINE");
+  assert.equal(failed.pending,1);
+  assert.equal(h.seenState.truthLastDeliveryStatus,"BRIDGE_OFFLINE");
+  assert.equal(h.seenState.truthSeenIds.includes(next.id), false);
+  h.setBridgeAvailable(true);
+  const delivered=await h.send({kind:"posts",posts:[next]});
+  assert.equal(delivered.status,"TRANSFERRED");
+  assert.equal(delivered.count,1);
+  assert.equal(h.seenState.truthSeenIds.includes(next.id), true);
+  assert.equal(h.seenState.truthLastDeliveryStatus,"QUEUED");
+  assert.equal(h.transfers.length,2);
 });
 
 
@@ -152,7 +170,7 @@ test("Tab-free background request HTTP 200 enables periodic worker alarm", async
   assert.equal(reply.count,1);
   assert.equal(h.alarms.get("truth-social-public-posts").periodInMinutes,0.5);
   assert.equal(h.badges.at(-1),"ON");
-  assert.equal(h.downloads.length,0); // baseline on first successful fetch
+  assert.equal(h.transfers.length,0); // baseline on first successful fetch
   const state=await h.popup("background_status");
   assert.equal(state.status,"HTTP_200");
   assert.equal(state.enabled,true);
@@ -205,7 +223,7 @@ test("Previously baselined tab data does not generate duplicate downloads", asyn
   }));
   const r=await h.popup("background_test");
   assert.equal(r.status,"HTTP_200");
-  assert.equal(h.downloads.length,0);
+  assert.equal(h.transfers.length,0);
   await h.send({kind:"health",status:"HTTP_200"});
   assert.equal(h.badges.at(-1),"ON"); // tab success does not change background status
 });

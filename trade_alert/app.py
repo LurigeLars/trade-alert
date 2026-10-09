@@ -13,6 +13,7 @@ from .breaking import poll_breaking_inbox
 from .truth_rss import RSSUnavailable, read_rss_once
 from .truth_direct import DirectUnavailable, fetch_public_statuses, read_direct_once
 from .chrome_feed import poll_browser_feed
+from .chrome_receiver import start_chrome_receiver
 from .mcp_client import MCPToolError
 from .news import (
     DTVWatchlistContext,
@@ -410,16 +411,28 @@ async def _run_chrome_bridge_loop(
     config: Config, store: StateStore, *, stop_event=None,
     pause_event=None, alert_callback=None,
 ) -> None:
-    while stop_event is None or not stop_event.is_set():
-        if pause_event is None or not pause_event.is_set():
-            try:
-                stats = poll_browser_feed(
-                    config, store, alert_callback=alert_callback)
-                if stats["alerts"] or stats["rejected"]:
-                    logging.info("Chrome local bridge: %s", stats)
-            except Exception:
-                logging.exception("Chrome local bridge error")
-        await _sleep_interruptible(config.chrome_bridge_poll_seconds, stop_event)
+    server = None
+    try:
+        try:
+            server, _ = start_chrome_receiver()
+        except OSError:
+            # Keep the legacy local-file scanner and other news adapters
+            # healthy if another process owns the port; never bind to LAN.
+            logging.exception("Chrome loopback receiver unavailable")
+        while stop_event is None or not stop_event.is_set():
+            if pause_event is None or not pause_event.is_set():
+                try:
+                    stats = poll_browser_feed(
+                        config, store, alert_callback=alert_callback)
+                    if stats["alerts"] or stats["rejected"]:
+                        logging.info("Chrome local bridge: %s", stats)
+                except Exception:
+                    logging.exception("Chrome local bridge error")
+            await _sleep_interruptible(config.chrome_bridge_poll_seconds, stop_event)
+    finally:
+        if server is not None:
+            await asyncio.to_thread(server.shutdown)
+            server.server_close()
 
 
 async def run_loop(
