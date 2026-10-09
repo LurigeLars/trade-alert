@@ -73,7 +73,7 @@ GEO = _words(
     "china", "ceasefire", "blockade", "nuclear",
 )
 ENERGY = _words(
-    "oil", "crude", "brent", "wti", "opec", "gasoline", "diesel",
+    "oil", "crude", "brent", "wti", "opec", "gasoline", "diesel", "energy",
     "refinery", "refineries", "lng", "natural gas", "pipeline",
 )
 # Concrete statements and changes, not generic "deal" / "great" / "bad".
@@ -157,9 +157,7 @@ def classify_trump_statement(text: str) -> TrumpSignal:
         candidates.append((7 if RATES_ACTION.search(excerpt) else 2, "RATES"))
     if TECH.search(excerpt) or (CHIPS.search(excerpt) and TECH_CONTEXT.search(excerpt)):
         # "I love potato chips" must not generate a technology alert.
-        tech_action = bool(TRADE_ACTION.search(excerpt) or
-                           _words("national security", "export controls",
-                                  "export restrictions", "chip ban").search(excerpt))
+        tech_action = bool(TRADE_ACTION.search(excerpt))
         candidates.append((7 if tech_action else 2, "TECH"))
     if TRADE.search(excerpt):
         candidates.append((7 if TRADE_ACTION.search(excerpt) else 4, "TRADE"))
