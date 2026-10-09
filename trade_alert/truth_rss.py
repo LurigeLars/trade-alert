@@ -22,6 +22,7 @@ from urllib.parse import urlsplit
 
 from .config import Config
 from .trump_filter import classify_trump_statement
+from .event_evidence import assess_truth_evidence
 from .notifier import notify
 from .state import StateStore
 
@@ -203,15 +204,21 @@ async def read_rss_once(config: Config, store: StateStore, *,
             continue
         # Account identity comes from a third-party archive. Do not attribute
         # this as an authenticated primary Truth Social API event.
-        signal = classify_trump_statement(post.text)
+        evidence = assess_truth_evidence(
+            caption=post.text, source="RSS",
+            signal=classify_trump_statement(post.text),
+        )
+        signal = evidence.signal
         score = signal.score
         if score < config.notification_min_score:
             continue
         body = (f"Trump · {signal.priority} / {signal.category} · oberoende RSS-arkiv (ej verifierad primärkälla)\n"
+                + f"Evidens: {evidence.event_kind} · EJ KONTROLLERAD\n"
                 + post.text[:600]
                 + "\nPublicerad enligt RSS "
                 + datetime.fromtimestamp(post.published).astimezone().strftime("%H:%M:%S")
-                + f" · upptäckt +{int(max(0, age))} sek")
+                + f" · upptäckt +{int(max(0, age))} sek"
+                + f"\nBedömning: {evidence.reason}")
         inserted = store.record_alert(
             item_key=key, source="TRUMP_TRUTH_RSS",
             provider="Trump's Truth RSS (third party)",
