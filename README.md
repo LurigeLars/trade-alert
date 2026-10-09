@@ -75,6 +75,8 @@ Primary source:
 - DTV TradingView News Flow;
 - polled every 20 seconds by default;
 - up to 200 headlines per fetch;
+- each successful cursor poll replays a 60-minute publication-time overlap so provider backfills with older `published_at` timestamps are still discovered promptly;
+- cross-source provider item IDs are deduplicated locally, so the replay window and Official TradingView corroboration cannot create duplicate alerts for the same story;
 - active TradingView watchlist is auto-resolved when no explicit local watchlist ID is configured;
 - auto-resolution requires a verified oil routing anchor before the numeric ID is accepted.
 
@@ -183,6 +185,7 @@ Important settings include:
 | `poll_seconds` | Primary News Flow cadence |
 | `official_poll_seconds` | Corroboration cadence |
 | `dtv_max_headlines` | Broad News Flow fetch bound |
+| `dtv_replay_overlap_seconds` | Publication-time replay overlap used to catch late/backfilled News Flow stories (default 3600 s) |
 | `official_max_headlines` | Per-symbol corroboration bound |
 | `notification_min_score` | Deterministic alert threshold |
 | `breaking_inbox_enabled` | Start separate local breaking-event intake task (does not enable an upstream provider) |
