@@ -35,8 +35,9 @@ async function health(status) {
   let badge = "?";
   let color = "#777777";
   if (status === "HTTP_200") { badge = "ON"; color = "#228b22"; }
-  else if (["HTTP_401","HTTP_403","HTTP_429"].includes(status)) {
-    badge = "403"; color = "#b00020";
+  else if (status === "HTTP_429") { badge = "429"; color = "#a85d00"; }
+  else if (["HTTP_401","HTTP_403"].includes(status)) {
+    badge = String(status.slice(-3)); color = "#b00020";
   } else if (status === "ERROR") { badge = "ERR"; color = "#b00020"; }
   await chrome.action.setBadgeText({text: badge});
   await chrome.action.setBadgeBackgroundColor({color});
@@ -119,11 +120,29 @@ async function handle(msg, sender) {
     return {status: "IGNORED"};
   }
   if (!validSender(sender)) return {status: "IGNORED"};
+  if (msg.kind === "monitor_mode") {
+    const state = await chrome.storage.local.get([
+      "truthBackgroundEnabled", "truthRateLimitUntil"
+    ]);
+    return {
+      tabAllowed: state.truthBackgroundEnabled !== true &&
+        Date.now() >= Number(state.truthRateLimitUntil || 0)
+    };
+  }
   if (msg.kind === "health") {
     const status = String(msg.status || "").slice(0, 20);
     const prefs = await chrome.storage.local.get(["truthBackgroundEnabled"]);
     // A success from a visible page is NOT evidence the tab-free source works.
-    if (!prefs.truthBackgroundEnabled) await health(status);
+    if (!prefs.truthBackgroundEnabled) {
+      if (status === "HTTP_429") {
+        await registerRateLimit();
+        await chrome.storage.local.set({
+          truthBackgroundLastStatus: "HTTP_429",
+          truthBackgroundLastChecked: new Date().toISOString()
+        });
+      }
+      await health(status);
+    }
     return {status};
   }
   if (msg.kind !== "posts" || !Array.isArray(msg.posts) ||
@@ -150,22 +169,45 @@ const BACKGROUND_ENDPOINT = "https://truthsocial.com/api/v1/accounts/" + ID +
                             "/statuses?exclude_replies=true&limit=25";
 let inFlight = false;
 
+const RATE_LIMIT_MIN_MS = 30 * 60 * 1000;
+const RATE_LIMIT_MAX_MS = 24 * 60 * 60 * 1000;
+
+async function registerRateLimit(retryAfter) {
+  let proposed = RATE_LIMIT_MIN_MS;
+  if (typeof retryAfter === "string") {
+    const seconds = Number(retryAfter.trim());
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      proposed = Math.max(proposed, seconds * 1000);
+    } else {
+      const date = Date.parse(retryAfter);
+      if (Number.isFinite(date)) proposed = Math.max(proposed, date - Date.now());
+    }
+  }
+  const old = await chrome.storage.local.get(["truthRateLimitUntil"]);
+  const until = Math.max(Number(old.truthRateLimitUntil || 0),
+    Date.now() + Math.min(RATE_LIMIT_MAX_MS, proposed));
+  await chrome.storage.local.set({truthRateLimitUntil: until});
+  return until;
+}
+
 async function backgroundStatus() {
   const values = await chrome.storage.local.get([
     "truthBackgroundEnabled", "truthBackgroundLastStatus",
-    "truthBackgroundLastChecked"
+    "truthBackgroundLastChecked", "truthRateLimitUntil"
   ]);
   return {
     enabled: values.truthBackgroundEnabled === true,
     status: values.truthBackgroundLastStatus || "NOT_TESTED",
-    checked: values.truthBackgroundLastChecked || null
+    checked: values.truthBackgroundLastChecked || null,
+    cooldown_until: Number(values.truthRateLimitUntil || 0)
   };
 }
 
 async function paintBackground(status) {
   const denied = ["HTTP_401", "HTTP_403", "HTTP_429"].includes(status);
   await chrome.action.setBadgeText({
-    text: status === "HTTP_200" ? "ON" : denied ? "403" : "ERR"
+    text: status === "HTTP_200" ? "ON" :
+      denied ? status.slice(-3) : "ERR"
   });
   await chrome.action.setBadgeBackgroundColor({
     color: status === "HTTP_200" ? "#228b22" : "#b00020"
@@ -192,6 +234,12 @@ async function setBackgroundEnabled(enabled) {
 
 async function runBackgroundFetch({enableOnSuccess = false} = {}) {
   if (inFlight) return {status: "BUSY", enabled: (await backgroundStatus()).enabled};
+  const current = await backgroundStatus();
+  if (Date.now() < current.cooldown_until) {
+    await paintBackground("HTTP_429");
+    return {status: "HTTP_429", enabled: false,
+            cooldown_until: current.cooldown_until};
+  }
   inFlight = true;
   let status = "ERROR";
   let count = 0;
@@ -206,6 +254,9 @@ async function runBackgroundFetch({enableOnSuccess = false} = {}) {
     status = "HTTP_" + response.status;
     if (!response.ok) {
       if ([401, 403, 429].includes(response.status)) {
+        if (response.status === 429) {
+          await registerRateLimit(response.headers?.get?.("retry-after"));
+        }
         await setBackgroundEnabled(false);
       }
     } else {
@@ -232,7 +283,9 @@ async function runBackgroundFetch({enableOnSuccess = false} = {}) {
     truthBackgroundLastChecked: new Date().toISOString()
   });
   await paintBackground(status);
-  return {status, count, enabled: (await backgroundStatus()).enabled};
+  const state = await backgroundStatus();
+  return {status, count, enabled: state.enabled,
+          cooldown_until: state.cooldown_until};
 }
 
 chrome.alarms.onAlarm.addListener(alarm => {
