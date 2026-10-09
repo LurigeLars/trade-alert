@@ -64,6 +64,39 @@ reports or repeated commentary. Neither OCR success nor these keyword rules
 establish that an image depicts a new event. Date/source validation and manual
 ground-truth image review remain necessary; no alert is proof of market impact.
 
+## Separate evidence and novelty triage
+
+The Truth direct, Chrome and third-party RSS pipelines now call
+`trade_alert.event_evidence.assess_truth_evidence` **after** the unchanged
+source-scoped topic classifier. The result contains an `event_kind`, original
+provenance, effective score/priority, a bounded reason and the explicit
+`INDEPENDENT_CONFIRMATION_NOT_CHECKED` state.
+
+This is **not** an external fact-check. Public-account identity authenticates
+where the post came from, **not** the accuracy, timing or origin of a screenshot.
+The third-party RSS feed is still not a primary-source authentication.
+
+| Evidence state | Treatment |
+| --- | --- |
+| `ACTION_CLAIM` | Immediate delivery with normal priority; source-authored policy action claims are still **unverified** |
+| `HYPOTHETICAL` | Narrow OCR-only counterfactual-policy report with no relevant account caption has its weak STANDARD alert suppressed; other claims retained |
+| `RECAP` | Explicitly retrospective image claim cannot create a *new* HIGH by itself; otherwise retain contextual STANDARD |
+| `DATA_CONTEXT` | Historical chart or statistical context still reaches its existing topic-based STANDARD alert, labelled as context rather than a fresh policy action |
+| `UNRESOLVED` | Retain existing classification and clearly mark external corroboration unperformed |
+
+The action detector does not use generic verbs such as `would` as proof that
+a rule is enacted, nor does a post's recent publication date prove a screenshot
+is recent. All new labels appear in alert bodies; no new API, credentials,
+network request, blocking verification step or model inference is introduced.
+External confirmation from reliable independent reporting is required before
+treating a quoted claim as established fact. It is **not** automatically
+performed by this release, and there is no automatic post-hoc upgrade.
+
+The local no-network `scripts/replay_truth_evidence.py --input PATH` command
+re-evaluates OCR text in a saved benchmark JSON. **The original 50-image
+benchmark does not contain captions**; the replay therefore gives an OCR-only
+upper/lower-bound diagnostic, not exact predictions of live post notifications.
+
 ## Public image text
 
 The Chrome public-account bridge and the verified direct public account
@@ -101,8 +134,7 @@ The RSS archive is a third-party source: applying the same wording-based
 filter does not upgrade it to verified primary-source evidence. Cross-source
 duplicate risk (RSS vs direct/Chrome) remains a separate outstanding issue.
 
-Media-only posts cannot be classified from their image/video content and are
-skipped by the existing ingestion pipeline.
+Image-only posts with supported public image attachments can be classified via\nlocal OCR; video-only posts without text remain unassessed.
 
 ## Examples
 
