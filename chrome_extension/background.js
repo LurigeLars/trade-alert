@@ -1,11 +1,13 @@
-/* Transfer only new, public account posts to Chrome's Downloads/TradeAlertChrome.
- * Data is untrusted on both sides. No browser cookies or tokens leave Chrome.
+/* Transfer fresh public-account posts silently to Windows Trade Alert
+ * over an IPv4 loopback-only POST. No browser downloads, prompts, tokens,
+ * cookies, other network destinations or credential exchange.
  */
 "use strict";
 
 const ID = "107780257626128497";
 const NAME = "realDonaldTrump";
 const POST_ID = /^[0-9]{10,24}$/;
+const LOCAL_INGEST = "http://127.0.0.1:18761/chrome-post";
 const MAX_SEEN = 400;
 let sequence = Promise.resolve();
 
@@ -74,30 +76,51 @@ async function ingest(posts) {
       });
     }
   }
-  const downloaded = [];
+  const delivered = [];
+  let failed = 0;
   for (const post of eligible.slice(0, 12)) {
     const json = JSON.stringify(post);
     if (json.length > 12000) continue;
     try {
-      await chrome.downloads.download({
-        url: "data:application/json;charset=utf-8," + encodeURIComponent(json),
-        filename: "TradeAlertChrome/post-" + post.id + ".json",
-        conflictAction: "overwrite",
-        saveAs: false
+      const response = await fetch(LOCAL_INGEST, {
+        method: "POST",
+        credentials: "omit",
+        cache: "no-store",
+        redirect: "error",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Trade-Alert-Bridge": "1"
+        },
+        body: json,
+        signal: AbortSignal.timeout(2000)
       });
-      downloaded.push(post.id);
+      if (!response.ok) throw Error("bridge HTTP " + response.status);
+      const acknowledgement = await response.json();
+      if (acknowledgement?.status !== "QUEUED" ||
+          String(acknowledgement?.id) !== post.id) {
+        throw Error("invalid local bridge acknowledgement");
+      }
+      delivered.push(post.id);
       known.add(post.id);
     } catch (err) {
-      // Do not record unseen messages as handled after failed transfer.
-      known.delete(post.id);
-      console.warn("Trade Alert Chrome transfer failed:", err?.message || "unknown");
+      // A failed local transfer does NOT consume the post ID. Retry it on the
+      // next healthy source fetch while it remains within the freshness window.
+      failed++;
+      console.warn("Trade Alert local transfer failed:", err?.message || "unknown");
     }
   }
-  // Even skipped old/irrelevant posts get a cursor so they cannot replay.
+  // Store source cursor only for delivered/new old posts, never for a
+  // failed local transfer. No fallback to Chrome downloads: that would
+  // reintroduce save-file prompts and break automation.
   await chrome.storage.local.set({
-    truthSeenIds: [...known].slice(-MAX_SEEN)
+    truthSeenIds: [...known].slice(-MAX_SEEN),
+    ...(eligible.length ? {
+      truthLastDeliveryStatus: failed ? "BRIDGE_OFFLINE" : "QUEUED",
+      truthLastDeliveryChecked: new Date().toISOString()
+    } : {})
   });
-  return {status: "TRANSFERRED", count: downloaded.length};
+  return {status: failed ? "BRIDGE_OFFLINE" : "TRANSFERRED",
+          count: delivered.length, pending: failed};
 }
 
 async function handle(msg, sender) {
@@ -194,7 +217,8 @@ async function backgroundStatus() {
   const values = await chrome.storage.local.get([
     "truthBackgroundEnabled", "truthBackgroundLastStatus",
     "truthBackgroundLastChecked", "truthRateLimitUntil",
-    "truthTabLastStatus", "truthTabLastChecked"
+    "truthTabLastStatus", "truthTabLastChecked",
+    "truthLastDeliveryStatus", "truthLastDeliveryChecked"
   ]);
   return {
     enabled: values.truthBackgroundEnabled === true,
@@ -202,7 +226,9 @@ async function backgroundStatus() {
     checked: values.truthBackgroundLastChecked || null,
     cooldown_until: Number(values.truthRateLimitUntil || 0),
     tab_status: values.truthTabLastStatus || "NOT_TESTED",
-    tab_checked: values.truthTabLastChecked || null
+    tab_checked: values.truthTabLastChecked || null,
+    delivery_status: values.truthLastDeliveryStatus || "NOT_TESTED",
+    delivery_checked: values.truthLastDeliveryChecked || null
   };
 }
 
