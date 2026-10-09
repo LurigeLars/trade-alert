@@ -8,7 +8,10 @@ const path = require("node:path");
 
 function harness() {
   const listeners = {};
-  const seenState = {};
+  const seenState = {truthLocalToken: "a".repeat(64)};
+  const pairingRequests = [];
+  let restrictedStorage = false;
+  let bridgeUnauthorized = false;
   const transfers = [];
   let bridgeAvailable = true;
   const badges = [];
@@ -28,6 +31,11 @@ function harness() {
       async clear(name) {alarms.delete(name);return true;}
     },
     storage: {local: {
+      async setAccessLevel({accessLevel}) {
+        assert.equal(accessLevel, "TRUSTED_CONTEXTS");
+        restrictedStorage = true;
+      },
+      async remove(key) {delete seenState[key];},
       async get(keys) {
         const out = {};
         for (const key of keys) if (key in seenState) out[key] = seenState[key];
@@ -49,9 +57,19 @@ function harness() {
   vm.runInNewContext(code, {
     chrome, console, URL, Date, Set,
     fetch: (url, options) => {
+      if (url === "http://127.0.0.1:18761/chrome-pair") {
+        pairingRequests.push({url, options});
+        return Promise.resolve({
+          ok: true, status: 200,
+          async json() {return {status: "PAIRED", token: "b".repeat(64)};}
+        });
+      }
       if (url === "http://127.0.0.1:18761/chrome-post") {
         transfers.push({url, options});
         if (!bridgeAvailable) return Promise.reject(Error("local app stopped"));
+        if (bridgeUnauthorized) return Promise.resolve({
+          ok: false, status: 401, async json(){return {status:"PAIR_REQUIRED"};}
+        });
         return Promise.resolve({
           ok: true, status: 200,
           async json() {
@@ -69,17 +87,19 @@ function harness() {
       if (yes !== true) reject(Error("listener not async"));
     });
   }
-  async function popup(kind) {
+  async function popup(kind, code) {
     return new Promise((resolve, reject) => {
       const yes = listeners.message(
-        {kind}, {url: "chrome-extension://test-extension/popup.html",
+        {kind, ...(code ? {code} : {})}, {url: "chrome-extension://test-extension/popup.html",
                  id:"test-extension"}, resolve
       );
       if (yes !== true) reject(Error("popup listener not async"));
     });
   }
   return {
-    send, popup, transfers, badges, seenState, alarms,
+    send, popup, transfers, pairingRequests, badges, seenState, alarms,
+    storageRestricted() {return restrictedStorage;},
+    setBridgeUnauthorized(value){bridgeUnauthorized=value;},
     setBridgeAvailable(value) {bridgeAvailable = value;},
     setFetch(fn) {nextFetch = fn;},
     listeners,
@@ -108,6 +128,7 @@ test("Initial fetch baselines and new posts transfer exactly once", async () => 
   assert.equal(h.transfers[0].options.method, "POST");
   assert.equal(h.transfers[0].options.credentials, "omit");
   assert.equal(h.transfers[0].options.headers["X-Trade-Alert-Bridge"], "1");
+  assert.equal(h.transfers[0].options.headers["X-Trade-Alert-Token"], "a".repeat(64));
   const payload = JSON.parse(h.transfers[0].options.body);
   assert.equal(payload.account.id,ACCOUNT);
   assert.equal(payload.id,next.id);
@@ -345,4 +366,42 @@ test("No background and no recent tab result is OFF", async () => {
   const status=await h.popup("background_status");
   assert.equal(status.enabled,false);
   assert.equal(h.badges.at(-1),"OFF");
+});
+
+
+test("Unpaired extension never transfers and pairs through popup only", async () => {
+  const h=harness();
+  delete h.seenState.truthLocalToken;
+  await h.send({kind:"posts",posts:[original]});
+  const next={...original,id:"117406359223020085"};
+  const denied=await h.send({kind:"posts",posts:[next]});
+  assert.equal(denied.status,"PAIR_REQUIRED");
+  assert.equal(h.transfers.length,0);
+  assert.equal(h.seenState.truthSeenIds.includes(next.id),false);
+  assert.equal((await h.popup("background_status")).local_paired,false);
+  assert.equal((await h.popup("pair_local", "not-code")).status,"INVALID_PAIRING_CODE");
+  const result=await h.popup("pair_local", "A".repeat(20));
+  assert.equal(result.status,"PAIRED");
+  assert.equal(h.pairingRequests.length,1);
+  assert.equal(h.pairingRequests[0].options.credentials,"omit");
+  assert.equal(h.pairingRequests[0].options.body,JSON.stringify({code:"A".repeat(20)}));
+  assert.equal(h.storageRestricted(),true);
+  assert.equal((await h.popup("background_status")).local_paired,true);
+  const ok=await h.send({kind:"posts",posts:[next]});
+  assert.equal(ok.status,"TRANSFERRED");
+  assert.equal(h.transfers[0].options.headers["X-Trade-Alert-Token"], "b".repeat(64));
+});
+
+test("Invalid token revokes local authorization and never marks post delivered", async () => {
+  const h=harness();
+  await h.send({kind:"posts",posts:[original]});
+  h.setBridgeUnauthorized(true);
+  const next={...original,id:"117406359223020085"};
+  const first=await h.send({kind:"posts",posts:[next]});
+  assert.equal(first.status,"PAIR_REQUIRED");
+  assert.equal(h.seenState.truthLocalToken,undefined);
+  assert.equal(h.seenState.truthSeenIds.includes(next.id),false);
+  const again=await h.send({kind:"posts",posts:[next]});
+  assert.equal(again.status,"PAIR_REQUIRED");
+  assert.equal(h.transfers.length,1);
 });

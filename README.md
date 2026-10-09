@@ -13,7 +13,7 @@ A [direct public Truth Social reader](docs/truth-direct.md) checks the anonymous
 
 An optional [local Chrome bridge](docs/chrome-bridge.md) transfers newly
 observed posts from Chrome to the Windows app via a **silent localhost
-HTTP POST** on 127.0.0.1:18761. Extension v0.3.0 no longer uses Chrome
+HTTP POST** on 127.0.0.1:18761. Extension v0.4.0 requires one-time user-approved pairing and a bearer token pinned to the exact Chrome extension Origin. The [pairing instructions](docs/chrome-bridge.md#authenticated-chrome-to-windows-pairing-extension-v040) explain how to obtain the short-lived code locally. Extension v0.3.0 and later no longer use Chrome
 downloads, so new posts cannot trigger repetitive Save As prompts.
 Its receiver binds only to 127.0.0.1, validates public account identity,
 and atomically queues posts for the existing local alert scanner.

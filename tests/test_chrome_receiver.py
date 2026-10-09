@@ -9,8 +9,9 @@ from datetime import datetime, timezone
 
 from trade_alert.chrome_feed import poll_browser_feed
 from trade_alert.chrome_receiver import (
-    BIND_HOST, INGEST_PATH, start_chrome_receiver
+    BIND_HOST, INGEST_PATH, PAIR_PATH, start_chrome_receiver
 )
+from trade_alert.chrome_pairing import PairingStore
 from trade_alert.config import Config
 from trade_alert.state import StateStore
 
@@ -37,12 +38,22 @@ class LoopbackReceiverTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.directory = pathlib.Path(self.tmp.name)
+        self.directory = pathlib.Path(self.tmp.name) / "inbox"
+        self.directory.mkdir()
+        self.authdir = pathlib.Path(self.tmp.name) / "private"
+        self.pairing = PairingStore(self.authdir)
+        code = self.pairing.issue_code()
         self.server, self.thread = start_chrome_receiver(
-            port=0, directory=self.directory
+            port=0, directory=self.directory, auth_directory=self.authdir
         )
         self.addCleanup(self.close_server)
         self.port = self.server.server_port
+        result = self.call(
+            "POST", json.dumps({"code": code}).encode(),
+            url=PAIR_PATH, token=None
+        )
+        self.assertEqual(result[0], 200)
+        self.token = json.loads(result[2])["token"]
 
     def close_server(self):
         self.server.shutdown()
@@ -50,7 +61,7 @@ class LoopbackReceiverTests(unittest.TestCase):
         self.thread.join(timeout=2)
 
     def call(self, method, body=b"", *, origin=ORIGIN, url=INGEST_PATH,
-             bridge="1", content_type="application/json"):
+             bridge="1", content_type="application/json", token="default"):
         conn = http.client.HTTPConnection(BIND_HOST, self.port, timeout=3)
         headers = {"Origin": origin}
         if method == "POST":
@@ -58,6 +69,10 @@ class LoopbackReceiverTests(unittest.TestCase):
                 "Content-Type": content_type,
                 "X-Trade-Alert-Bridge": bridge,
             })
+            if token == "default":
+                token = getattr(self, "token", None)
+            if token is not None:
+                headers["X-Trade-Alert-Token"] = token
         conn.request(method, url, body, headers)
         response = conn.getresponse()
         data = response.read()
@@ -121,6 +136,66 @@ class LoopbackReceiverTests(unittest.TestCase):
         self.assertIn("POST", headers["Access-Control-Allow-Methods"])
         denied = self.call("OPTIONS", origin="https://truthsocial.com")
         self.assertEqual(denied[0], 403)
+
+    def test_unpaired_requests_and_other_extension_are_denied(self):
+        body = json.dumps(post()).encode("utf-8")
+        self.assertEqual(self.call("POST", body, token=None)[0], 401)
+        self.assertEqual(self.call(
+            "POST", body, token="c" * 64
+        )[0], 401)
+        self.assertEqual(self.call(
+            "POST", body, origin="chrome-extension://" + "b" * 32
+        )[0], 403)
+        self.assertFalse(list(self.directory.iterdir()))
+
+    def test_one_time_pairing_replay_rejected_and_rotation_revokes_old_token(self):
+        old_token = self.token
+        same_code = self.pairing.issue_code()
+        denied = self.call(
+            "POST", json.dumps({"code": "0" * 20}).encode(),
+            url=PAIR_PATH, token=None
+        )
+        self.assertEqual(denied[0], 403)
+        approved = self.call(
+            "POST", json.dumps({"code": same_code}).encode(),
+            url=PAIR_PATH, token=None
+        )
+        self.assertEqual(approved[0], 200)
+        new_token = json.loads(approved[2])["token"]
+        self.assertNotEqual(new_token, old_token)
+        replay = self.call(
+            "POST", json.dumps({"code": same_code}).encode(),
+            url=PAIR_PATH, token=None
+        )
+        self.assertEqual(replay[0], 403)
+        self.assertEqual(self.call(
+            "POST", json.dumps(post()).encode(), token=old_token
+        )[0], 401)
+        self.assertEqual(self.call(
+            "POST", json.dumps(post()).encode(), token=new_token
+        )[0], 200)
+
+    def test_pair_rate_limit_and_http_rejection(self):
+        for _ in range(4):
+            self.assertEqual(self.call(
+                "POST", b'{"code":"00000000000000000000"}',
+                url=PAIR_PATH, token=None
+            )[0], 403)
+        self.assertEqual(self.call(
+            "POST", b'{"code":"00000000000000000000"}',
+            url=PAIR_PATH, token=None
+        )[0], 429)
+        # Existing authorized posts still work when pair attempts are blocked.
+        self.assertEqual(self.call(
+            "POST", json.dumps(post()).encode()
+        )[0], 200)
+
+    def test_reject_many_unauthorized_requests(self):
+        body = json.dumps(post()).encode()
+        for _ in range(12):
+            self.assertEqual(self.call("POST", body, token=None)[0], 401)
+        self.assertEqual(self.call("POST", body, token=None)[0], 429)
+        self.assertEqual(self.call("POST", body)[0], 200)
 
     def test_binds_loopback_only(self):
         self.assertEqual(self.server.server_address[0], "127.0.0.1")
