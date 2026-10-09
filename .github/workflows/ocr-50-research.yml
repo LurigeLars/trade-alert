@@ -1,0 +1,54 @@
+name: OCR research - 50 public Truth Social images
+
+on:
+  push:
+    branches: [research/trump-ocr-benchmark-50-20261009]
+    paths:
+      - ".github/workflows/ocr-50-research.yml"
+      - "research/trump_ocr_benchmark.py"
+      - "research/trump-ocr-20261009-50-images.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ocr-50-research
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install local OCR dependencies
+        shell: bash
+        run: |
+          set -eu
+          python -m pip install 'Pillow==12.3.0'
+          if ! command -v tesseract >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends tesseract-ocr
+          fi
+          tesseract --version | head -n 1
+      - name: Fetch 50 public image attachments and compare real OCR
+        env:
+          PYTHONPATH: .
+        run: |
+          python research/trump_ocr_benchmark.py \
+            --dataset research/trump-ocr-20261009-50-images.json \
+            --output research/results/trump-ocr-50.json
+      - name: Publish JSON results only (no images)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trump-ocr-50-public-results
+          path: research/results/trump-ocr-50.json
+          if-no-files-found: warn
+          retention-days: 14
