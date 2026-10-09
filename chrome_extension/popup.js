@@ -17,7 +17,11 @@ function show(response) {
     "\nLast status: " + label +
     (Number.isFinite(response.count) ? "\nVerified posts: " + response.count : "") +
     (response.checked ? "\nLast checked: " +
-      new Date(response.checked).toLocaleTimeString("en-GB") : "");
+      new Date(response.checked).toLocaleTimeString("en-GB") : "") +
+    (Number(response.cooldown_until || 0) > Date.now()
+      ? "\nRate limited: paused until " +
+        new Date(response.cooldown_until).toLocaleTimeString("en-GB")
+      : "");
 }
 async function action(kind) {
   buttons.forEach(b => {b.disabled = true;});
