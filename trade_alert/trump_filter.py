@@ -99,7 +99,10 @@ POLICY_ACTION = re.compile(
 RATES_ACTION = re.compile(
     r"\b(?:rate (?:cut|cuts|hike|hikes|increase|reduction)|"
     r"interest rate(?:s)? (?:cut|cuts|hike|hikes|increase)|"
-    r"lower(?:ing)? rates|rais(?:e|ing) rates|"
+    r"(?:cut|cuts|cutting|reduce|reduces|reducing|"
+    r"raise|raises|raising|hike|hikes|hiking|"
+    r"lower|lowers|lowering|increase|increases|increasing)"
+    r" (?:interest )?rates?|"
     r"fire(?:s|d)?|replace|remov(?:e|ing)|resign|"
     r"emergency|quantitative easing|quantitative tightening|"
     r"intervention|independence|nomina(?:te|ted|tion)|appoint(?:s|ed)?)\b",
