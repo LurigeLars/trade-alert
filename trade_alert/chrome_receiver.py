@@ -15,7 +15,6 @@ import re
 import tempfile
 import threading
 import time
-import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
