@@ -155,6 +155,12 @@ def classify_trump_statement(text: str) -> TrumpSignal:
         candidates.append((geo_score, "GEOPOLITICS"))
     if RATES.search(excerpt):
         candidates.append((7 if RATES_ACTION.search(excerpt) else 2, "RATES"))
+    if TECH.search(excerpt) or (CHIPS.search(excerpt) and TECH_CONTEXT.search(excerpt)):
+        # "I love potato chips" must not generate a technology alert.
+        tech_action = bool(TRADE_ACTION.search(excerpt) or
+                           _words("national security", "export controls",
+                                  "export restrictions", "chip ban").search(excerpt))
+        candidates.append((7 if tech_action else 2, "TECH"))
     if TRADE.search(excerpt):
         candidates.append((7 if TRADE_ACTION.search(excerpt) else 4, "TRADE"))
     if FISCAL.search(excerpt):
@@ -162,12 +168,6 @@ def classify_trump_statement(text: str) -> TrumpSignal:
                                   POLICY_ACTION.search(excerpt)) else 2, "FISCAL"))
     if DEFENSE.search(excerpt):
         candidates.append((7 if DEFENSE_ACTION.search(excerpt) else 2, "DEFENSE"))
-    if TECH.search(excerpt) or (CHIPS.search(excerpt) and TECH_CONTEXT.search(excerpt)):
-        # "I love potato chips" must not generate a technology alert.
-        tech_action = bool(TRADE_ACTION.search(excerpt) or
-                           _words("national security", "export controls",
-                                  "export restrictions", "chip ban").search(excerpt))
-        candidates.append((7 if tech_action else 2, "TECH"))
 
     # Avoid category inflation from overlapping keywords; HIGH requires a
     # concrete impact-bearing context in one category, not unrelated nouns.
