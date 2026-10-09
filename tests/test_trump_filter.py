@@ -27,6 +27,8 @@ class TrumpMarketImpactTests(unittest.TestCase):
         samples = [
             ("We are removing Powell as head of the Federal Reserve immediately.",
              "RATES"),
+            ("The Fed will cut interest rates tomorrow.", "RATES"),
+            ("The Federal Reserve raises rates immediately.", "RATES"),
             ("We are imposing 100 percent tariffs on imports from China tomorrow.",
              "TRADE"),
             ("I signed an executive order imposing semiconductor export controls.",
