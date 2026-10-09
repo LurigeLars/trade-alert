@@ -11,6 +11,12 @@ It continuously reads bounded news feeds, applies deterministic relevance rules,
 
 A [direct public Truth Social reader](docs/truth-direct.md) checks the anonymous public JSON endpoint for the verified Trump account every 15 seconds when reachable, with failure backoff and RSS as a fallback. Availability must be verified from the Windows host; it never logs in or evades access restrictions.
 
+**Image-text reliability:** Local OCR includes a bounded second pass over
+the poster header and other image regions if the whole-image Tesseract
+layout misses market terms. An offline reproducible test runs
+`python -m trade_alert.media_ocr PATH_TO_IMAGE.png`, printing the OCR
+text and deterministic classification; it does not generate any alerts.
+
 **Public image OCR (optional):** Extension v0.5.0 forwards bounded,
 allowlisted image attachment metadata for on-device Tesseract text recognition.
 A chart or meme containing terms like `CRUDE OIL` can now trigger an
