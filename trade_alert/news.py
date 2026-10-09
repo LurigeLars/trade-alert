@@ -76,7 +76,8 @@ class Headline:
     @property
     def dedupe_key(self) -> str:
         """Provider item identity independent of discovery source."""
-        return self.item_id
+        provider = (self.provider or "").strip().casefold()
+        return f"{provider}|{self.item_id}"
 
     @property
     def age_seconds(self) -> float | None:
