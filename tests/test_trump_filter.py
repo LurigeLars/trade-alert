@@ -30,12 +30,12 @@ class TrumpMarketImpactTests(unittest.TestCase):
             ("We are imposing 100 percent tariffs on imports from China tomorrow.",
              "TRADE"),
             ("I signed an executive order imposing semiconductor export controls.",
-             "TRADE"),
+             "TECH"),
             ("Government shutdown begins tomorrow.", "FISCAL"),
             ("Congress must prevent a US default this week.", "FISCAL"),
             ("NATO will withdraw all troops from the region.", "DEFENSE"),
             ("We are attacking Iran tonight.", "GEOPOLITICS"),
-            ("We are banning advanced chips from export to China.", "TRADE"),
+            ("We are banning advanced chips from export to China.", "TECH"),
         ]
         for text, category in samples:
             with self.subTest(text=text):
