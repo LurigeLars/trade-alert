@@ -32,19 +32,13 @@ function validSender(sender) {
 }
 
 async function health(status) {
-  let badge = "?";
-  let color = "#777777";
-  if (status === "HTTP_200") { badge = "ON"; color = "#228b22"; }
-  else if (status === "HTTP_429") { badge = "429"; color = "#a85d00"; }
-  else if (["HTTP_401","HTTP_403"].includes(status)) {
-    badge = String(status.slice(-3)); color = "#b00020";
-  } else if (status === "ERROR") { badge = "ERR"; color = "#b00020"; }
-  await chrome.action.setBadgeText({text: badge});
-  await chrome.action.setBadgeBackgroundColor({color});
-  await chrome.action.setTitle({
-    title: "Trade Alert Chrome: " + status +
-      " (Chrome page must remain open; background timers can be delayed)"
+  // The tab reader has its own observation state. It must NEVER imply the
+  // independent background service worker has been enabled.
+  await chrome.storage.local.set({
+    truthTabLastStatus: status,
+    truthTabLastChecked: new Date().toISOString()
   });
+  await refreshBadge();
 }
 
 async function ingest(posts) {
@@ -140,18 +134,12 @@ async function handle(msg, sender) {
         truthBackgroundLastStatus: "HTTP_429",
         truthBackgroundLastChecked: new Date().toISOString()
       });
-      await paintBackground("HTTP_429");
+      await health("HTTP_429");
       return {status};
     }
-    const prefs = await chrome.storage.local.get([
-      "truthBackgroundEnabled", "truthRateLimitUntil"
-    ]);
-    // Neither a stale tab's success nor a fresh attempt during the cooldown
-    // should relabel an actual rate-limit condition as healthy.
-    if (!prefs.truthBackgroundEnabled &&
-        Date.now() >= Number(prefs.truthRateLimitUntil || 0)) {
-      await health(status);
-    }
+    // Store tab observations independently even if BG is active. Rendering
+    // derives one authoritative badge from persisted background mode first.
+    await health(status);
     return {status};
   }
   if (msg.kind !== "posts" || !Array.isArray(msg.posts) ||
@@ -202,42 +190,82 @@ async function registerRateLimit(retryAfter) {
 async function backgroundStatus() {
   const values = await chrome.storage.local.get([
     "truthBackgroundEnabled", "truthBackgroundLastStatus",
-    "truthBackgroundLastChecked", "truthRateLimitUntil"
+    "truthBackgroundLastChecked", "truthRateLimitUntil",
+    "truthTabLastStatus", "truthTabLastChecked"
   ]);
   return {
     enabled: values.truthBackgroundEnabled === true,
     status: values.truthBackgroundLastStatus || "NOT_TESTED",
     checked: values.truthBackgroundLastChecked || null,
-    cooldown_until: Number(values.truthRateLimitUntil || 0)
+    cooldown_until: Number(values.truthRateLimitUntil || 0),
+    tab_status: values.truthTabLastStatus || "NOT_TESTED",
+    tab_checked: values.truthTabLastChecked || null
   };
 }
 
-async function paintBackground(status) {
-  const denied = ["HTTP_401", "HTTP_403", "HTTP_429"].includes(status);
-  await chrome.action.setBadgeText({
-    text: status === "HTTP_200" ? "ON" :
-      denied ? status.slice(-3) : "ERR"
-  });
-  await chrome.action.setBadgeBackgroundColor({
-    color: status === "HTTP_200" ? "#228b22" : "#b00020"
-  });
-  await chrome.action.setTitle({
-    title: status === "HTTP_200"
-      ? "Trade Alert: Trump Monitor ON (keep Chrome running)"
-      : "Trade Alert: Trump Monitor " + status + " – check extension status"
-  });
+async function refreshBadge() {
+  // One authoritative renderer for badge/title. A tab HTTP 200 never sets
+  // ON; that label is exclusive to a recently successful enabled BG poll.
+  const state = await backgroundStatus();
+  const now = Date.now();
+  const bgAge = now - Date.parse(state.checked || "");
+  const tabAge = now - Date.parse(state.tab_checked || "");
+  const bgRecent = Number.isFinite(bgAge) && bgAge >= 0 && bgAge <= 120000;
+  const tabRecent = Number.isFinite(tabAge) && tabAge >= 0 && tabAge <= 120000;
+  let badge = "OFF";
+  let color = "#777777";
+  let title = "Trade Alert: Trump Monitor OFF (no recent account-tab data)";
+
+  if (state.cooldown_until > now) {
+    badge = "429";
+    color = "#a85d00";
+    title = "Trade Alert: HTTP 429 rate limit; monitor paused";
+  } else if (state.enabled) {
+    if (state.status === "HTTP_200" && bgRecent) {
+      badge = "ON";
+      color = "#228b22";
+      title = "Trade Alert: background Trump Monitor ON";
+    } else if (["HTTP_401", "HTTP_403"].includes(state.status) && bgRecent) {
+      badge = state.status.slice(-3);
+      color = "#b00020";
+      title = "Trade Alert: background source refused " + state.status;
+    } else if (state.status === "ERROR" && bgRecent) {
+      badge = "ERR";
+      color = "#b00020";
+      title = "Trade Alert: background monitor reported an error";
+    } else {
+      badge = "WAIT";
+      title = "Trade Alert: background monitor enabled, awaiting fresh result";
+    }
+  } else if (tabRecent && state.tab_status === "HTTP_200") {
+    badge = "TAB";
+    color = "#507899";
+    title = "Trade Alert: account-tab backup active; background monitor OFF";
+  } else if (tabRecent && ["HTTP_401", "HTTP_403"].includes(state.tab_status)) {
+    badge = state.tab_status.slice(-3);
+    color = "#b00020";
+    title = "Trade Alert: account-tab backup access denied";
+  } else if (bgRecent && ["HTTP_401", "HTTP_403"].includes(state.status)) {
+    badge = state.status.slice(-3);
+    color = "#b00020";
+    title = "Trade Alert: background source refused; monitor OFF";
+  }
+  await chrome.action.setBadgeText({text: badge});
+  await chrome.action.setBadgeBackgroundColor({color});
+  await chrome.action.setTitle({title});
+  return badge;
 }
 
 async function setBackgroundEnabled(enabled) {
   if (enabled) {
     await chrome.storage.local.set({truthBackgroundEnabled: true});
     await chrome.alarms.create(BACKGROUND_ALARM, {periodInMinutes: 0.5});
+    await refreshBadge();
     return {status: "ENABLED", enabled: true};
   }
   await chrome.storage.local.set({truthBackgroundEnabled: false});
   await chrome.alarms.clear(BACKGROUND_ALARM);
-  await chrome.action.setBadgeText({text: "TAB"});
-  await chrome.action.setBadgeBackgroundColor({color: "#777777"});
+  await refreshBadge();
   return {status: "DISABLED", enabled: false};
 }
 
@@ -245,7 +273,7 @@ async function runBackgroundFetch({enableOnSuccess = false} = {}) {
   if (inFlight) return {status: "BUSY", enabled: (await backgroundStatus()).enabled};
   const current = await backgroundStatus();
   if (Date.now() < current.cooldown_until) {
-    await paintBackground("HTTP_429");
+    await refreshBadge();
     return {status: "HTTP_429", enabled: false,
             cooldown_until: current.cooldown_until};
   }
@@ -291,7 +319,7 @@ async function runBackgroundFetch({enableOnSuccess = false} = {}) {
     truthBackgroundLastStatus: status,
     truthBackgroundLastChecked: new Date().toISOString()
   });
-  await paintBackground(status);
+  await refreshBadge();
   const state = await backgroundStatus();
   return {status, count, enabled: state.enabled,
           cooldown_until: state.cooldown_until};
@@ -310,6 +338,7 @@ async function restoreBackgroundAlarm() {
   if (state.enabled) {
     await chrome.alarms.create(BACKGROUND_ALARM, {periodInMinutes: 0.5});
   }
+  await refreshBadge();
 }
 
 chrome.runtime.onInstalled.addListener(() => {
