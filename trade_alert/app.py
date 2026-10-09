@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .config import Config, app_dir
 from .breaking import poll_breaking_inbox
@@ -47,6 +47,21 @@ def _notification(item: Headline, score: int) -> tuple[str, str]:
     urgency = "TOP · " if item.urgency == 1 else ""
     body = f"{urgency}{item.title}\nPublicerad {item.published_label()} · relevans {score}"
     return title, body
+
+
+def _dtv_since_with_overlap(value: str | None, overlap_seconds: int) -> str | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        logging.warning("Ignoring invalid DTV cursor timestamp: %s", value)
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return (
+        parsed.astimezone(timezone.utc) - timedelta(seconds=max(0, int(overlap_seconds)))
+    ).isoformat()
 
 
 def _cached_dtv_context(config: Config, store: StateStore) -> DTVWatchlistContext | None:
@@ -142,7 +157,10 @@ async def run_once(
 ) -> dict:
     first_cycle = not store.initialized()
     dtv_first_cycle = store.get_meta("dtv_news_flow_initialized_at") is None
-    dtv_since = store.get_meta("dtv_last_success")
+    dtv_since = _dtv_since_with_overlap(
+        store.get_meta("dtv_last_success"),
+        config.dtv_replay_overlap_seconds,
+    )
     items, dtv_ok, official_ok, dtv_fetched = await _collect(
         config,
         store,
@@ -154,7 +172,7 @@ async def run_once(
     fresh = 0
 
     for item in sorted(items, key=lambda x: x.published or 0):
-        if store.seen(item.key):
+        if store.seen(item.key) or store.seen_item(item.dedupe_key):
             continue
         fresh += 1
         score = relevance_score(item)
@@ -186,6 +204,7 @@ async def run_once(
             if notify(title, body):
                 notified += 1
         store.mark_seen(item.key, at=now)
+        store.mark_seen_item(item.dedupe_key, at=now)
 
     if dtv_ok:
         store.set_meta("dtv_last_success", datetime.now(timezone.utc).isoformat())

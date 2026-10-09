@@ -96,6 +96,7 @@ def monitoring_summary(
         f"{'ingen ansluten livekälla' if not config.breaking_authorized_sources else 'inbox-bevakning aktiv, upstream ej automatiskt verifierad'}\n\n"
         f"Polling\n"
         f"• News Flow: var {config.poll_seconds} s · max {config.dtv_max_headlines} headlines\n"
+        f"• News Flow replay-overlap: {config.dtv_replay_overlap_seconds} s för sena/backfillade stories\n"
         f"• Official TradingView: var {config.official_poll_seconds} s · "
         f"max {config.official_max_headlines} headlines/symbol\n\n"
         f"Alertfilter\n"

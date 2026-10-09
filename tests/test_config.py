@@ -44,6 +44,23 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(200, migrated["dtv_max_headlines"])
             self.assertEqual(25, migrated["official_max_headlines"])
 
+    def test_existing_config_adds_news_flow_replay_overlap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "profile_name": "Custom",
+                        "official_symbols": ["ICEEUR:BRN1!"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = Config.load(path)
+            self.assertEqual(3600, config.dtv_replay_overlap_seconds)
+            migrated = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(3600, migrated["dtv_replay_overlap_seconds"])
+
     def test_legacy_default_official_symbols_adds_rbob(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "config.json"
@@ -83,6 +100,10 @@ class ConfigTests(unittest.TestCase):
             config = Config(theme_mode="dark")
             config.save(path)
             self.assertEqual("dark", Config.load(path).theme_mode)
+
+    def test_invalid_news_flow_replay_overlap_is_rejected(self):
+        with self.assertRaises(ValueError):
+            Config(dtv_replay_overlap_seconds=7201).validate()
 
     def test_invalid_theme_mode_is_rejected(self):
         with self.assertRaises(ValueError):

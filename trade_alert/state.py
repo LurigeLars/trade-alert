@@ -34,6 +34,10 @@ class StateStore:
                 item_key TEXT PRIMARY KEY,
                 first_seen REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS seen_items (
+                dedupe_key TEXT PRIMARY KEY,
+                first_seen REAL NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS meta (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -56,6 +60,18 @@ class StateStore:
                 ON alerts(unread, created_at DESC);
             """
         )
+        self.con.execute(
+            """
+            INSERT OR IGNORE INTO seen_items(dedupe_key, first_seen)
+            SELECT
+                lower(trim(COALESCE(a.provider, ''))) || '|' ||
+                    substr(s.item_key, length(a.source) + 2),
+                s.first_seen
+            FROM seen AS s
+            JOIN alerts AS a ON a.item_key = s.item_key
+            WHERE substr(s.item_key, 1, length(a.source) + 1) = a.source || ':'
+            """
+        )
         self.con.commit()
 
     def close(self) -> None:
@@ -68,6 +84,19 @@ class StateStore:
         self.con.execute(
             "INSERT OR IGNORE INTO seen(item_key, first_seen) VALUES (?, ?)",
             (key, at or time.time()),
+        )
+        self.con.commit()
+
+    def seen_item(self, dedupe_key: str) -> bool:
+        return self.con.execute(
+            "SELECT 1 FROM seen_items WHERE dedupe_key=?",
+            (dedupe_key,),
+        ).fetchone() is not None
+
+    def mark_seen_item(self, dedupe_key: str, at: float | None = None) -> None:
+        self.con.execute(
+            "INSERT OR IGNORE INTO seen_items(dedupe_key, first_seen) VALUES (?, ?)",
+            (dedupe_key, at or time.time()),
         )
         self.con.commit()
 
@@ -168,5 +197,6 @@ class StateStore:
         cutoff = time.time() - days * 86400
         alert_cutoff = time.time() - alert_days * 86400
         self.con.execute("DELETE FROM seen WHERE first_seen < ?", (cutoff,))
+        self.con.execute("DELETE FROM seen_items WHERE first_seen < ?", (cutoff,))
         self.con.execute("DELETE FROM alerts WHERE created_at < ?", (alert_cutoff,))
         self.con.commit()
