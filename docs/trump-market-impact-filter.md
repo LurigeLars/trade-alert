@@ -22,9 +22,16 @@ unrelated TradingView provider headlines.
 | RATES | Fed, Federal Reserve, FOMC, Powell, Treasury, bond yields | Explicit rate or Fed governance intervention, removal/appointment, emergency policy |
 | TRADE | tariffs, sanctions, trade deal, export controls, duties | Imposition, removal, expansion, agreement, announcement or effective restriction |
 | FISCAL | Congress, debt ceiling, government shutdown, budgets, taxes | Shutdown/default or a concrete fiscal policy action |
-| DEFENSE | NATO, Pentagon, bomb/bombed/bombing, bomber(s), war, Navy/naval fleet/warships, Air Force, Army, armed forces | Bombing/airstrike, declared war, deployment or other concrete military action |
+| DEFENSE | NATO, Pentagon, bomb/bombed/bombing, bomber(s), war, Navy/naval fleet/warships, aircraft carrier(s), carrier(s) in naval context, Air Force, Army | Bombing/airstrike, declared war, carrier deployment/repositioning or other concrete military action |
 | TECH | semiconductors, chipmakers, Nvidia, advanced chips, AI | Chip/semiconductor trade controls, bans or security restrictions |
 | GEOPOLITICS | Iran, Hormuz, Cuba/Havana, Venezuela/Caracas, China, Russia, Ukraine, Israel, Taiwan | Meaningful conflict/blockade/sanctions/ceasefire statement |
+
+Words such as `carrier` and `carriers` are ambiguous. The classifier
+requires nearby naval language (Navy, aircraft, fleet, warships, strike group,
+etc.) or geopolitical movement, and filters local commercial terms (mobile,
+insurance, shipping, container, freight and airline). It does not treat
+generic logistics or telecommunications carriers as military signals.
+A carrier strike group's name alone is STANDARD, not a HIGH military strike.
 
 Legacy direct-watch trigger words (oil, Iran, Venezuela, tariffs,
 nuclear and related terms) continue to count as relevant at STANDARD level
@@ -69,6 +76,8 @@ skipped by the existing ingestion pipeline.
 - "I admire our Navy and Air Force" -> **STANDARD / DEFENSE**
 - "We will bomb Cuba tomorrow" -> **HIGH / DEFENSE**
 - "Our Army has deployed to Venezuela" -> **HIGH / DEFENSE**
+- "Our aircraft carriers are impressive" -> **STANDARD / DEFENSE**
+- "Our carriers are heading to Cuba" -> **HIGH / DEFENSE**
 - "War is terrible" -> **STANDARD / DEFENSE**
 - "Happy birthday" -> **IGNORE**
 
