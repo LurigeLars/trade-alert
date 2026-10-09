@@ -21,7 +21,7 @@ cookies, tokens or browser profiles and does not change IP addresses.
    no Save As prompt and no public inbound network listener.
 4. Trade Alert's Windows process listens only on IPv4 loopback and accepts
    the POST only with an extension Origin, exact path, JSON content type,
-   fixed header and a bounded body. It validates public account identity,
+   fixed header, paired extension Origin, bearer token and bounded body. It validates public account identity,
    atomically writes the post into the existing internal Chrome inbox and
    acknowledges the exact post ID. The same one-second file scanner then
    independently validates, scores and deduplicates posts before saving
@@ -216,10 +216,60 @@ Windows Trade Alert process when chrome_bridge_enabled is true.
 Never ask users to disable Chrome's global download safety preferences just
 to run Trade Alert.
 
+## Authenticated Chrome-to-Windows pairing (extension v0.4.0)
+
+**The v0.3.0 unpaired POST endpoint is disabled.** Local Windows
+ingress on 127.0.0.1:18761 requires the exact paired Chrome extension
+Origin **and** a random 256-bit bearer token. Another extension's
+Origin alone is not sufficient. This protects against unauthorized
+webpages/extensions but cannot defeat same-user Windows malware.
+
+One-time setup (repeat when extension ID changes or credentials rotate):
+
+1. Update the local repo and restart the tray application using
+   scripts/install-windows-startup.ps1. Check that
+   chrome_bridge_enabled=true in %LOCALAPPDATA%/TradeAlert/config.json.
+2. Generate a one-time code locally in PowerShell; keep its output private:
+
+       Set-Location 'C:\ClaudeCode\trade-alert'
+       .\.venv\Scripts\python.exe -m trade_alert.chrome_pairing pair
+
+3. Within 10 minutes, reload the unpacked Chrome extension at
+   chrome://extensions and paste the displayed 20-character code into
+   the popup's "One-time local pairing code" field. Click
+   "Pair with Windows Trade Alert".
+4. Confirm "Local pairing: PAIRED". The service worker stores the
+   credential in chrome.storage.local with access restricted to
+   TRUSTED_CONTEXTS. No credentials go to Truth Social.
+5. For the next genuine new post, "Local delivery: QUEUED" means Windows
+   accepted the post. Existing deduplication and relevance filters still
+   determine which Windows alerts are generated. PAIR_REQUIRED means
+   generate a new one-time code; BRIDGE_OFFLINE means restart the app.
+
+Server-side controls:
+- 127.0.0.1 IPv4 binding only, exact /chrome-pair and /chrome-post routes,
+  fixed headers, bounded JSON length and content-type checks.
+- Cryptographically random 80-bit pairing code expires after ten minutes
+  and is valid for one exchange. The server writes only its hash to disk.
+- The 256-bit bearer token is returned once to the extension; Windows
+  stores only its SHA-256 hash, pinned extension Origin and pairing time.
+  The token is never logged or committed.
+- A new successful pairing revokes the preceding token and extension ID.
+- Maximum five pairing requests in ten minutes, a separate unauthorized
+  request limit, bounded post rate, three-second socket timeout and
+  eight concurrent connections.
+- Fail closed if pairing is missing or the token is rejected. No
+  fallback to Chrome downloads or unauthenticated HTTP POSTs.
+
+A local program with access to the same Windows user profile may be able
+to read extension credentials or forge requests. Local pairing is not a
+defense against a compromised Windows account. Treat public post content
+as untrusted regardless of source authentication.
+
 ## Security and reliability limits
 
 - The extension can read the fixed public JSON endpoint only from its listed
-  host permission; it never exports cookies or account credentials.
+  host permission; it never exports Truth Social cookies or account credentials. Its local bridge token stays in trusted extension storage.
 - Chrome MAIN-world messages must be considered **untrusted**. The receiving
   Python process validates fixed account identity, fresh publication and
   post IDs again; this is not a cryptographically authenticated feed.

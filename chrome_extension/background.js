@@ -1,6 +1,6 @@
 /* Transfer fresh public-account posts silently to Windows Trade Alert
- * over an IPv4 loopback-only POST. No browser downloads, prompts, tokens,
- * cookies, other network destinations or credential exchange.
+ * over an IPv4 loopback-only authenticated POST. No Chrome downloads,
+ * no Truth Social cookies, other destinations or login credentials.
  */
 "use strict";
 
@@ -8,6 +8,43 @@ const ID = "107780257626128497";
 const NAME = "realDonaldTrump";
 const POST_ID = /^[0-9]{10,24}$/;
 const LOCAL_INGEST = "http://127.0.0.1:18761/chrome-post";
+const LOCAL_PAIR = "http://127.0.0.1:18761/chrome-pair";
+const LOCAL_TOKEN_FORMAT = /^[a-f0-9]{64}$/;
+const PAIR_CODE_FORMAT = /^[A-F0-9]{20}$/;
+const trustedStorage = chrome.storage.local.setAccessLevel({
+  accessLevel: "TRUSTED_CONTEXTS"
+}).then(() => true).catch(() => false);
+
+async function pairLocal(code) {
+  if (typeof code !== "string" ||
+      !PAIR_CODE_FORMAT.test(code.trim().toUpperCase()) ||
+      !(await trustedStorage)) return {status: "INVALID_PAIRING_CODE"};
+  try {
+    const response = await fetch(LOCAL_PAIR, {
+      method: "POST", credentials: "omit", cache: "no-store",
+      redirect: "error",
+      headers: {"Content-Type": "application/json",
+                "X-Trade-Alert-Bridge": "1"},
+      body: JSON.stringify({code: code.trim().toUpperCase()}),
+      signal: AbortSignal.timeout(3000)
+    });
+    const answer = await response.json();
+    if (!response.ok || answer?.status !== "PAIRED" ||
+        !LOCAL_TOKEN_FORMAT.test(String(answer.token || ""))) {
+      return {status: response.status === 429 ? "PAIR_LIMITED" :
+               "PAIR_FAILED"};
+    }
+    await chrome.storage.local.set({
+      truthLocalToken: answer.token,
+      truthLastDeliveryStatus: "PAIRED",
+      truthLastDeliveryChecked: new Date().toISOString()
+    });
+    return {status: "PAIRED"};
+  } catch {
+    return {status: "BRIDGE_OFFLINE"};
+  }
+}
+
 const MAX_SEEN = 400;
 let sequence = Promise.resolve();
 
@@ -76,8 +113,18 @@ async function ingest(posts) {
       });
     }
   }
+  const auth = await chrome.storage.local.get(["truthLocalToken"]);
+  if (!(await trustedStorage) ||
+      !LOCAL_TOKEN_FORMAT.test(String(auth.truthLocalToken || ""))) {
+    await chrome.storage.local.set({
+      truthLastDeliveryStatus: "PAIR_REQUIRED",
+      truthLastDeliveryChecked: new Date().toISOString()
+    });
+    return {status: "PAIR_REQUIRED", count: 0, pending: eligible.length};
+  }
   const delivered = [];
   let failed = 0;
+  let unauthorized = false;
   for (const post of eligible.slice(0, 12)) {
     const json = JSON.stringify(post);
     if (json.length > 12000) continue;
@@ -89,11 +136,17 @@ async function ingest(posts) {
         redirect: "error",
         headers: {
           "Content-Type": "application/json",
-          "X-Trade-Alert-Bridge": "1"
+          "X-Trade-Alert-Bridge": "1",
+          "X-Trade-Alert-Token": auth.truthLocalToken
         },
         body: json,
         signal: AbortSignal.timeout(2000)
       });
+      if (response.status === 401 || response.status === 403) {
+        unauthorized = true;
+        await chrome.storage.local.remove("truthLocalToken");
+        throw Error("local bridge requires pairing");
+      }
       if (!response.ok) throw Error("bridge HTTP " + response.status);
       const acknowledgement = await response.json();
       if (acknowledgement?.status !== "QUEUED" ||
@@ -107,6 +160,7 @@ async function ingest(posts) {
       // next healthy source fetch while it remains within the freshness window.
       failed++;
       console.warn("Trade Alert local transfer failed:", err?.message || "unknown");
+      if (unauthorized) break; // No further attempts with a revoked token.
     }
   }
   // Store source cursor only for delivered/new old posts, never for a
@@ -115,11 +169,13 @@ async function ingest(posts) {
   await chrome.storage.local.set({
     truthSeenIds: [...known].slice(-MAX_SEEN),
     ...(eligible.length ? {
-      truthLastDeliveryStatus: failed ? "BRIDGE_OFFLINE" : "QUEUED",
+      truthLastDeliveryStatus: unauthorized ? "PAIR_REQUIRED" :
+        failed ? "BRIDGE_OFFLINE" : "QUEUED",
       truthLastDeliveryChecked: new Date().toISOString()
     } : {})
   });
-  return {status: failed ? "BRIDGE_OFFLINE" : "TRANSFERRED",
+  return {status: unauthorized ? "PAIR_REQUIRED" :
+          failed ? "BRIDGE_OFFLINE" : "TRANSFERRED",
           count: delivered.length, pending: failed};
 }
 
@@ -132,6 +188,7 @@ async function handle(msg, sender) {
       return backgroundStatus();
     }
     if (msg.kind === "background_test") return runBackgroundFetch({enableOnSuccess: true});
+    if (msg.kind === "pair_local") return pairLocal(msg.code);
     if (msg.kind === "background_off") return setBackgroundEnabled(false);
     if (msg.kind === "open_tab") {
       await chrome.tabs.create({url: "https://truthsocial.com/@realDonaldTrump"});
@@ -218,7 +275,7 @@ async function backgroundStatus() {
     "truthBackgroundEnabled", "truthBackgroundLastStatus",
     "truthBackgroundLastChecked", "truthRateLimitUntil",
     "truthTabLastStatus", "truthTabLastChecked",
-    "truthLastDeliveryStatus", "truthLastDeliveryChecked"
+    "truthLastDeliveryStatus", "truthLastDeliveryChecked", "truthLocalToken"
   ]);
   return {
     enabled: values.truthBackgroundEnabled === true,
@@ -228,7 +285,8 @@ async function backgroundStatus() {
     tab_status: values.truthTabLastStatus || "NOT_TESTED",
     tab_checked: values.truthTabLastChecked || null,
     delivery_status: values.truthLastDeliveryStatus || "NOT_TESTED",
-    delivery_checked: values.truthLastDeliveryChecked || null
+    delivery_checked: values.truthLastDeliveryChecked || null,
+    local_paired: LOCAL_TOKEN_FORMAT.test(String(values.truthLocalToken || ""))
   };
 }
 
