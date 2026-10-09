@@ -76,6 +76,7 @@ def main() -> None:
         report = replay(data)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         parser.error(f"Cannot read benchmark report: {type(error).__name__}")
+        return  # Explicitly terminate this branch for static dataflow analysis.
     print(json.dumps(report, indent=2, ensure_ascii=False))
 
 
