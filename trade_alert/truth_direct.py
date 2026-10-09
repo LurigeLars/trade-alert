@@ -19,6 +19,7 @@ from typing import Callable
 
 from .config import Config
 from .trump_filter import classify_trump_statement
+from .event_evidence import assess_truth_evidence
 from .media_ocr import extract_image_text, image_url_from_post
 from .notifier import notify
 from .state import StateStore
@@ -273,7 +274,11 @@ async def read_direct_once(config: Config, store: StateStore, *,
         if not post.text and not image_text:
             continue
         analysis_text = " ".join(x for x in (post.text, image_text) if x)
-        signal = classify_trump_statement(analysis_text)
+        evidence = assess_truth_evidence(
+            caption=post.text, image_text=image_text, source="DIRECT",
+            signal=classify_trump_statement(analysis_text),
+        )
+        signal = evidence.signal
         score = signal.score
         if score < config.notification_min_score:
             continue
@@ -283,7 +288,8 @@ async def read_direct_once(config: Config, store: StateStore, *,
             f"Trump · {signal.priority} / {signal.category} · Truth Social offentligt inlägg\n{text}{ocr_label}\n"
             f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
             f" · upptäckt +{int(max(0, age))} s\n"
-            "Direkt källa; påståenden ej oberoende verifierade."
+            f"Evidens: {evidence.event_kind} · {evidence.reason}\n"
+            "Oberoende bekräftelse: EJ KONTROLLERAD. Ett nytt inlägg är inte bevis på en ny händelse."
         )
         inserted = store.record_alert(
             item_key=key, source="TRUTH_PUBLIC",
