@@ -1,5 +1,4 @@
 """No-network evidence triage regressions using patterns observed in real OCR."""
-import asyncio
 import json
 import tempfile
 import unittest
@@ -10,7 +9,7 @@ from unittest.mock import patch
 from trade_alert.config import Config
 from trade_alert.event_evidence import assess_truth_evidence
 from trade_alert.state import StateStore
-from trade_alert.trump_filter import TrumpSignal, classify_trump_statement
+from trade_alert.trump_filter import TrumpSignal
 from trade_alert.truth_direct import DirectPost, DirectResult, read_direct_once
 from trade_alert.chrome_feed import poll_browser_feed
 
