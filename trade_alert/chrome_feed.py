@@ -1,7 +1,7 @@
-"""Consume Chrome-extension downloads of publicly visible, untrusted account posts.
+"""Consume locally queued, untrusted public account posts from Chrome.
 
-No HTTP listener, tokens, cookies, browser session capture, extension APIs or
-browser automation in this module. Chrome supplies bounded JSON via Downloads.
+Image OCR is local, bounded and limited to static-assets Truth Social CDN.
+The same post-ID cursor prevents duplicates between text and image signals.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from .config import Config
 from .notifier import notify
 from .state import StateStore
 from .truth_direct import DirectUnavailable, parse_statuses
+from .media_ocr import extract_image_text, image_url_from_post
 from .trump_filter import classify_trump_statement
 
 POST_FILENAME = re.compile(r"^post-([0-9]{10,24})\.json$")
@@ -34,7 +35,8 @@ def poll_browser_feed(
 ) -> dict:
     """Ingest a bounded, locally transferred batch. Never trust file attribution."""
     stats = {"files": 0, "alerts": 0, "notified": 0,
-             "rejected": 0, "stale": 0, "duplicates": 0}
+             "rejected": 0, "stale": 0, "duplicates": 0,
+             "ocr_ok": 0, "ocr_unavailable": 0, "ocr_failed": 0}
     if not config.chrome_bridge_enabled:
         return stats
     folder = directory if directory is not None else browser_feed_path()
@@ -68,24 +70,40 @@ def poll_browser_feed(
             if age < -120 or age > config.chrome_bridge_max_age_seconds:
                 stats["stale"] += 1
                 continue
-            if post.media_only:
-                # Keep a record of the post ID without pretending it is
-                # possible to assess the content of video/images as text.
-                logging.info("Chrome post %s has only media; cannot classify", post.post_id)
+            image_text = ""
+            if image_url_from_post(row):
+                image_text, image_status = extract_image_text(row)
+                if image_status == "OCR_OK":
+                    stats["ocr_ok"] += 1
+                elif image_status == "OCR_UNAVAILABLE":
+                    stats["ocr_unavailable"] += 1
+                elif image_status != "NO_IMAGE":
+                    stats["ocr_failed"] += 1
+                if image_status != "OCR_OK":
+                    logging.warning(
+                        "Chrome image post %s could not be assessed: %s",
+                        post.post_id, image_status
+                    )
+            elif post.media_only:
+                logging.info("Chrome post %s has media without approved image URL", post.post_id)
+            if not post.text and not image_text:
                 continue
-            signal = classify_trump_statement(post.text)
+            analysis_text = " ".join(part for part in (post.text, image_text) if part)
+            signal = classify_trump_statement(analysis_text)
             score = signal.score
             if score < config.notification_min_score:
                 continue
+            caption = post.text[:450] if post.text else "[Ingen inläggstext]"
+            image_evidence = ("\n[Bildtext via lokal OCR] " + image_text[:650]) if image_text else ""
             body = (f"Trump · {signal.priority} / {signal.category} · Chrome-källa\n"
-                    f"{post.text[:650]}\n"
+                    f"{caption}{image_evidence}\n"
                     f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
                     f" · mottagen +{int(max(0, age))} sek\n"
                     "Ingen automatisk handel.")
             stored = store.record_alert(
                 item_key=key, source="TRUTH_CHROME",
                 provider="Truth Social (local Chrome tab)",
-                headline=post.text[:240], body=body, score=score,
+                headline=analysis_text[:240], body=body, score=score,
                 published=post.published, link=post.link, at=now,
             )
             if not stored:

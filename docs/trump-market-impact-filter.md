@@ -41,6 +41,21 @@ Ordinary proper-name mentions such as "met Powell" or "met NATO leaders"
 are STANDARD, not HIGH. Generic social posts without a market term and
 phrases such as "potato chips" are IGNORE.
 
+## Public image text
+
+The Chrome public-account bridge and the verified direct public account
+adapter can classify locally recognized **text in images** (Tesseract OCR)
+together with the post's original caption. The source text and OCR-derived
+text are separately labelled; extracted words are not verified claims.
+For example "DAYS WITH CRUDE OIL ABOVE $100" in an attached chart
+qualifies as **STANDARD / ENERGY**, even if the accompanying political
+caption has no market terms. No image is sent to a paid/cloud AI service.
+
+Images without approved media URLs, uninstalled/unavailable OCR, embedded
+text too stylized to recognize, and videos remain unassessed; the filter does
+not infer a chart's causal meaning, present-day prices, accuracy or visual
+semantics. Refer to [local image OCR setup](chrome-bridge.md#local-public-image-ocr-extension-v050).
+
 ## Priority and delivery
 
 - **HIGH**: score 6–10; explicit subject-specific action/consequence.

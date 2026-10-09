@@ -11,6 +11,15 @@ It continuously reads bounded news feeds, applies deterministic relevance rules,
 
 A [direct public Truth Social reader](docs/truth-direct.md) checks the anonymous public JSON endpoint for the verified Trump account every 15 seconds when reachable, with failure backoff and RSS as a fallback. Availability must be verified from the Windows host; it never logs in or evades access restrictions.
 
+**Public image OCR (optional):** Extension v0.5.0 forwards bounded,
+allowlisted image attachment metadata for on-device Tesseract text recognition.
+A chart or meme containing terms like `CRUDE OIL` can now trigger an
+ENERGY alert even if the caption has no market terms. Install Tesseract on
+Windows and verify `python -m trade_alert.media_ocr` reports READY.
+The app fetches images only from approved Truth Social public static-asset
+hosts, sends no image to an AI provider, and labels OCR-derived evidence.
+[Setup and limits](docs/chrome-bridge.md#local-public-image-ocr-extension-v050).
+
 An optional [local Chrome bridge](docs/chrome-bridge.md) transfers newly
 observed posts from Chrome to the Windows app via a **silent localhost
 HTTP POST** on 127.0.0.1:18761. Extension v0.4.0 requires one-time user-approved pairing and a bearer token pinned to the exact Chrome extension Origin. The [pairing instructions](docs/chrome-bridge.md#authenticated-chrome-to-windows-pairing-extension-v040) explain how to obtain the short-lived code locally. Extension v0.3.0 and later no longer use Chrome

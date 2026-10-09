@@ -92,7 +92,11 @@
           },
           content: row?.content,
           media_attachments: Array.isArray(row?.media_attachments)
-            ? row.media_attachments.slice(0, 1).map(media => ({type: media.type}))
+            ? row.media_attachments.slice(0, 2).map(media => ({
+                type: media?.type,
+                url: media?.url,
+                preview_url: media?.preview_url
+              }))
             : []
         }));
         report("posts", {posts});
