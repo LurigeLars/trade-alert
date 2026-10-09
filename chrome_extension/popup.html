@@ -71,6 +71,19 @@
   button:hover { background: rgba(45, 74, 107, .94); }
   button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   button:disabled { opacity: .6; cursor: wait; }
+  .pair-input {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid rgba(158,195,232,.72);
+    color: #fff;
+    background: rgba(10,21,36,.94);
+    letter-spacing: .08em;
+    font: 600 13px ui-monospace, monospace;
+  }
+  .pair-label { display: block; font-weight: 700; margin-bottom: 7px; }
+  .pair-feedback { margin: 5px 0 12px; min-height: 17px; }
   .note {
     padding: 11px 12px;
     margin: 17px 0 0;
@@ -83,6 +96,15 @@
 <body>
 <h1>Trade Alert · Trump Monitor</h1>
 <div id="status" class="status" role="status" aria-live="polite">Checking monitor status…</div>
+<section class="note" aria-label="Local pairing">
+  <label class="pair-label" for="pair-code">One-time local pairing code</label>
+  <input id="pair-code" class="pair-input" type="text" maxlength="20"
+         placeholder="Paste 20-character code" spellcheck="false"
+         autocomplete="off" autocapitalize="characters">
+  <button id="pair" type="button">Pair with Windows Trade Alert</button>
+  <div id="pair-feedback" class="pair-feedback" role="status" aria-live="polite"></div>
+  <small>Generate a code in PowerShell: <code>python -m trade_alert.chrome_pairing pair</code>. The code expires in 10 minutes.</small>
+</section>
 <button id="test" type="button">Activate Trump Monitor</button>
 <button id="off" type="button">Disable Trump Monitor</button>
 <button id="open" type="button">Backup Monitor</button>
