@@ -151,7 +151,7 @@ DEFENSE_ACTION = re.compile(
 # Explicit intent (will bomb), a bombing action, or a war declaration is HIGH.
 BOMB_INTENT = re.compile(
     r"\b(?:will|to|going to|plan to|plans to|intend to|intends to|may|"
-    r"might|could)\s+bomb\b", re.IGNORECASE,
+    r"might|could)(?:\s+not)?\s+bomb\b", re.IGNORECASE,
 )
 BOMBING_VERB = re.compile(
     r"\b(?:bombs|bombed|bombing)\b", re.IGNORECASE,
