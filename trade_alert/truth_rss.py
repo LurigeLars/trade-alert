@@ -212,7 +212,7 @@ async def read_rss_once(config: Config, store: StateStore, *,
         score = signal.score
         if score < config.notification_min_score:
             continue
-        body = (f"Trump · {signal.priority} / {signal.category} · tredjeparts-RSS\n"
+        body = (f"Trump · {signal.priority} / {signal.category} · oberoende RSS-arkiv (ej verifierad primärkälla)\n"
                 + f"Evidens: {evidence.event_kind} · EJ KONTROLLERAD\n"
                 + post.text[:600]
                 + "\nPublicerad enligt RSS "
