@@ -99,7 +99,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(1, result["notified"])
                 self.assertEqual(1, store.unread_alert_count())
                 self.assertEqual(1, mocked_notify.call_count)
-                self.assertTrue(store.seen_item("te_news:590623:0"))
+                self.assertTrue(store.seen_item("trading economics|te_news:590623:0"))
             finally:
                 store.close()
 
