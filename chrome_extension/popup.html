@@ -86,7 +86,7 @@
 <button id="test" type="button">Activate Trump Monitor</button>
 <button id="off" type="button">Disable Trump Monitor</button>
 <button id="open" type="button">Backup Monitor</button>
-<p class="note">ON means background monitoring is responding. Keep Chrome running. If the monitor reports 403, use Backup Monitor to open the account tab.</p>
+<p class="note">ON means background monitoring is responding. Keep Chrome running. HTTP 429 means requests are rate limited; monitoring pauses for at least 30 minutes. If 403 appears, use Backup Monitor to open the account tab.</p>
 <script src="popup.js"></script>
 </body>
 </html>
