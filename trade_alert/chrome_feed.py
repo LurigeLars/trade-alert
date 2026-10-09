@@ -18,6 +18,7 @@ from .state import StateStore
 from .truth_direct import DirectUnavailable, parse_statuses
 from .media_ocr import extract_image_text, image_url_from_post
 from .trump_filter import classify_trump_statement
+from .event_evidence import assess_truth_evidence
 
 POST_FILENAME = re.compile(r"^post-([0-9]{10,24})\.json$")
 MAX_FILE_BYTES = 16384
@@ -89,16 +90,22 @@ def poll_browser_feed(
             if not post.text and not image_text:
                 continue
             analysis_text = " ".join(part for part in (post.text, image_text) if part)
-            signal = classify_trump_statement(analysis_text)
+            evidence = assess_truth_evidence(
+                caption=post.text, image_text=image_text, source="CHROME",
+                signal=classify_trump_statement(analysis_text),
+            )
+            signal = evidence.signal
             score = signal.score
             if score < config.notification_min_score:
                 continue
             caption = post.text[:450] if post.text else "[Ingen inläggstext]"
             image_evidence = ("\n[Bildtext via lokal OCR] " + image_text[:650]) if image_text else ""
             body = (f"Trump · {signal.priority} / {signal.category} · Chrome-källa\n"
+                    f"Evidens: {evidence.event_kind} · EJ KONTROLLERAD\n"
                     f"{caption}{image_evidence}\n"
                     f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
                     f" · mottagen +{int(max(0, age))} sek\n"
+                    f"Bedömning: {evidence.reason}\n"
                     "Ingen automatisk handel.")
             stored = store.record_alert(
                 item_key=key, source="TRUTH_CHROME",

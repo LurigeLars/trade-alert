@@ -19,6 +19,19 @@ text and deterministic classification; it does not generate any alerts.
 
 **Historical OCR benchmark:** An unlabelled set of public Trump image URL references and a non-alerting, local 50-unique-image Tesseract diagnostic are available in [the real-image benchmark guide](docs/truth-ocr-benchmark.md). It does not measure accuracy until manually verified labels are added.
 
+**Claim novelty and evidence triage:** All Truth Social/direct, Chrome and
+archive alert candidates now pass through a deterministic, no-network evidence
+step after topic scoring. It distinguishes direct policy action claims, quoted
+historical recaps, background statistical context, counterfactual policy
+reports and unknown claims. It never claims independent corroboration and does
+not delay immediate policy-action alerts. A narrowly matched hypothetical
+report inside an image alone no longer creates a weak policy alert unless
+the original account caption is itself market-relevant. Existing oil/chart
+STANDARD coverage remains intact. Offline comparison of the prior OCR report:
+`python scripts/replay_truth_evidence.py --input <local-report.json>`.
+This archived report contains no captions and is not a live pipeline replay.
+[Evidence rules and limits](docs/trump-market-impact-filter.md#separate-evidence-and-novelty-triage).
+
 **Public image OCR (optional):** Extension v0.5.0 forwards bounded,
 allowlisted image attachment metadata for on-device Tesseract text recognition.
 A chart or meme containing terms like `CRUDE OIL` can now trigger an
