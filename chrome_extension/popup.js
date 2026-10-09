@@ -1,9 +1,13 @@
 "use strict";
 
 const el = document.getElementById("status");
-const buttons = ["test", "off", "open"].map(id => document.getElementById(id));
-async function call(kind) {
-  return chrome.runtime.sendMessage({kind});
+const buttons = ["test", "off", "open", "pair"].map(
+  id => document.getElementById(id)
+);
+const pairCode = document.getElementById("pair-code");
+const pairFeedback = document.getElementById("pair-feedback");
+async function call(kind, extra = {}) {
+  return chrome.runtime.sendMessage({kind, ...extra});
 }
 function show(response) {
   if (!response) {
@@ -26,6 +30,7 @@ function show(response) {
     (response.tab_checked ? "\nLast tab status: " + response.tab_status +
       " (" + new Date(response.tab_checked).toLocaleTimeString("en-GB") + ")" : "") +
     (Number.isFinite(response.count) ? "\nVerified posts: " + response.count : "") +
+    "\nLocal pairing: " + (response.local_paired ? "PAIRED" : "REQUIRED") +
     "\nLocal delivery: " + (response.delivery_status || "NOT_TESTED") +
     (response.delivery_checked ? " (" +
       new Date(response.delivery_checked).toLocaleTimeString("en-GB") + ")" : "") +
@@ -52,4 +57,29 @@ async function action(kind) {
 buttons[0].addEventListener("click", () => action("background_test"));
 buttons[1].addEventListener("click", () => action("background_off"));
 buttons[2].addEventListener("click", () => action("open_tab"));
+buttons[3].addEventListener("click", async () => {
+  const code = pairCode.value.trim().toUpperCase();
+  if (!/^[A-F0-9]{20}$/.test(code)) {
+    pairFeedback.textContent = "Enter the 20-character code from Windows.";
+    return;
+  }
+  buttons.forEach(button => {button.disabled = true;});
+  pairFeedback.textContent = "Pairing with Windows application…";
+  try {
+    const result = await call("pair_local", {code});
+    if (result?.status === "PAIRED") {
+      pairCode.value = "";
+      pairFeedback.textContent = "Paired. Authenticated local delivery enabled.";
+    } else {
+      pairFeedback.textContent = result?.status === "PAIR_LIMITED"
+        ? "Too many attempts. Wait before trying again."
+        : "Pairing failed. Check the code and that Trade Alert is running.";
+    }
+    show(await call("background_status"));
+  } catch {
+    pairFeedback.textContent = "Could not reach the local application.";
+  } finally {
+    buttons.forEach(button => {button.disabled = false;});
+  }
+});
 action("background_status");
