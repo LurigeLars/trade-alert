@@ -21,7 +21,7 @@ from typing import Callable
 from urllib.parse import urlsplit
 
 from .config import Config
-from .news import Headline, relevance_score
+from .trump_filter import classify_trump_statement
 from .notifier import notify
 from .state import StateStore
 
@@ -203,14 +203,11 @@ async def read_rss_once(config: Config, store: StateStore, *,
             continue
         # Account identity comes from a third-party archive. Do not attribute
         # this as an authenticated primary Truth Social API event.
-        score = relevance_score(Headline(
-            source="TRUMP_TRUTH_RSS", item_id=post.key,
-            title="Trump statement: " + post.text,
-            published=post.published
-        ))
+        signal = classify_trump_statement(post.text)
+        score = signal.score
         if score < config.notification_min_score:
             continue
-        body = ("Trump's Truth (oberoende RSS-arkiv, ej verifierad primärkälla)\n"
+        body = (f"Trump · {signal.priority} / {signal.category} · oberoende RSS-arkiv (ej verifierad primärkälla)\n"
                 + post.text[:600]
                 + "\nPublicerad enligt RSS "
                 + datetime.fromtimestamp(post.published).astimezone().strftime("%H:%M:%S")
@@ -229,7 +226,7 @@ async def read_rss_once(config: Config, store: StateStore, *,
                 alert_callback(store.unread_alert_count())
             except Exception:
                 logging.exception("RSS unread count callback failed")
-        if notification("Trade Alert · Trump RSS", body):
+        if notification(f"Trade Alert · Trump {signal.priority} · {signal.category} (RSS)", body):
             notified += 1
         else:
             logging.error("RSS alert saved but Windows toast was not accepted")

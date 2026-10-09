@@ -23,6 +23,12 @@ The Chrome popup is English-only, shows **ON** for a successful background
 poll, and uses the public portrait avatar with dark readable overlays and a
 dark fallback if the image CDN is unavailable.
 
+Trump-account messages across the Chrome bridge, direct API and RSS archive
+now use one [source-scoped multi-asset impact filter](docs/trump-market-impact-filter.md)
+covering Fed/rates, tariffs, budgets/debt ceiling, NATO/defense, geopolitics,
+energy and semiconductors/export controls. HIGH and STANDARD priorities appear
+in Windows alert titles. Broad TradingView oil-news scoring is unchanged.
+
 An independent [Trump's Truth RSS monitor](docs/trump-truth-rss.md) provides a public, third-party source for presidential statements. Its own provider generally updates every few minutes: it is not an institutional breaking wire or a direct Truth Social API.
 
 It is deliberately **not** an execution system. It has no broker login, order placement, order modification, or order-cancellation capability.

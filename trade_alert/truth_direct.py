@@ -18,7 +18,7 @@ from html.parser import HTMLParser
 from typing import Callable
 
 from .config import Config
-from .news import Headline, relevance_score
+from .trump_filter import classify_trump_statement
 from .notifier import notify
 from .state import StateStore
 
@@ -30,12 +30,6 @@ STATUSES_URL = (
 )
 MAX_BYTES = 512 * 1024
 POST_ID = re.compile(r"^[0-9]{10,24}$")
-POLICY = re.compile(
-    r"\b(?:iran|hormuz|venezuela|russia|ukraine|israel|china|taiwan|"
-    r"tariffs?|sanctions?|embargo|blockade|oil|gasoline|crude|energy|"
-    r"nuclear|federal reserve|interest rates?|attack|strikes?|"
-    r"war|military|opec|trade deal|ceasefire)\b", re.IGNORECASE
-)
 
 
 class DirectUnavailable(RuntimeError):
@@ -233,13 +227,8 @@ def fetch_public_statuses(*, timeout: float = 6.0) -> DirectResult:
 
 
 def _relevance(text: str) -> int:
-    score = relevance_score(Headline(
-        source="TRUTH_PUBLIC", item_id="candidate",
-        title="Trump statement: " + text[:1500], published=None,
-    ))
-    if POLICY.search(text):
-        score = max(4, score)
-    return score
+    """Compatibility wrapper for the shared source-scoped classifier."""
+    return classify_trump_statement(text).score
 
 
 async def read_direct_once(config: Config, store: StateStore, *,
@@ -269,12 +258,13 @@ async def read_direct_once(config: Config, store: StateStore, *,
         if post.media_only:
             media_skipped += 1
             continue
-        score = _relevance(post.text)
+        signal = classify_trump_statement(post.text)
+        score = signal.score
         if score < config.notification_min_score:
             continue
         text = post.text[:700]
         body = (
-            f"Trump · offentligt Truth Social-inlägg\n{text}\n"
+            f"Trump · {signal.priority} / {signal.category} · Truth Social offentligt inlägg\n{text}\n"
             f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
             f" · upptäckt +{int(max(0, age))} s\n"
             "Direkt källa; påståenden ej oberoende verifierade."
@@ -293,7 +283,7 @@ async def read_direct_once(config: Config, store: StateStore, *,
                 alert_callback(store.unread_alert_count())
             except Exception:
                 logging.exception("Direct-source unread callback failed")
-        if notification("Trade Alert · Trump Direct", body):
+        if notification(f"Trade Alert · Trump {signal.priority} · {signal.category}", body):
             notified += 1
         else:
             logging.error("Direct-source alert saved, Windows toast failed: %s", key)
