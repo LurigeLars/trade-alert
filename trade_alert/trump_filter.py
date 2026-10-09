@@ -171,7 +171,15 @@ def classify_trump_statement(text: str) -> TrumpSignal:
 
     # Avoid category inflation from overlapping keywords; HIGH requires a
     # concrete impact-bearing context in one category, not unrelated nouns.
-    candidates.append((legacy, "ENERGY" if ENERGY.search(excerpt) else "GEOPOLITICS"))
+    legacy_category = (
+        "ENERGY" if ENERGY.search(excerpt) else
+        "RATES" if RATES.search(excerpt) else
+        "TRADE" if TRADE.search(excerpt) else
+        "FISCAL" if FISCAL.search(excerpt) else
+        "DEFENSE" if DEFENSE.search(excerpt) else
+        "TECH" if TECH.search(excerpt) else "GEOPOLITICS"
+    )
+    candidates.append((legacy, legacy_category))
     score, category = max(candidates, key=lambda x: x[0])
     score = max(0, min(10, score))
     priority = "HIGH" if score >= 6 else "STANDARD" if score >= 2 else "IGNORE"
