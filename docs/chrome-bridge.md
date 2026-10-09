@@ -137,6 +137,34 @@ permitting or denying a tab read. If service-worker communication fails,
 the tab does **not** fetch: it tries the lightweight permission check again
 at its next interval. The existing third-party RSS fallback is independent.
 
+## Badge versus actual monitor mode
+
+The toolbar badge is derived centrally from the service worker's persisted
+settings and fresh source observations, not directly from an account-tab
+HTTP response. This prevents the former bug where opening Truth Social
+changed the toolbar badge to ON even though the popup said
+`Background monitor: OFF`.
+
+- `ON`: independent background monitor enabled, with a successful
+  background HTTP 200 within the preceding two minutes
+- `TAB`: background monitor OFF, fresh tab-based backup HTTP 200
+- `OFF`: no enabled background monitor and no fresh working tab source
+- `WAIT`: background monitor enabled but no recent successful result yet
+- `429`: shared API rate-limit cooldown still in force
+- `403` / `401`: relevant recent source denied access
+- `ERR`: enabled background source reported a recent error
+
+The popup separately shows **Background monitor**, **Last background
+status/checked**, and **Tab backup / Last tab status**. A historical
+background HTTP 429 remains visible as historical context even when the
+cooldown has elapsed and a working account tab is shown as TAB.
+Opening the popup re-renders the badge from persisted state so stale
+previous badges cannot persist indefinitely.
+
+The 120-second source freshness heuristic describes the latest observed
+poll, not end-to-end Windows alert delivery. The latter still requires a
+real new post for end-to-end verification.
+
 ## Security and reliability limits
 
 - The extension can read the fixed public JSON endpoint only from its listed

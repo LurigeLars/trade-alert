@@ -26,9 +26,11 @@ test("English popup with required controls and explanatory copy", () => {
     "Senast kontrollerad", "Gör ett direkt test"
   ]) assert.ok(![html,popup].some(s=>s.includes(swedish)),"Found Swedish: "+swedish);
   assert.ok(popup.includes('"Background monitor: "'));
-  assert.ok(popup.includes('Last status: '));
+  assert.ok(popup.includes('Last background status: '));
   assert.ok(popup.includes('Verified posts: '));
-  assert.ok(popup.includes('Last checked: '));
+  assert.ok(popup.includes('Background checked: '));
+  assert.ok(popup.includes('Tab backup: '));
+  assert.ok(popup.includes('Last tab status: '));
   assert.ok(popup.includes('toLocaleTimeString("en-GB")'));
 });
 
@@ -42,9 +44,11 @@ test("Portrait background and opacity-based contrast have fallback", () => {
 });
 
 test("Healthy monitor uses ON rather than BG, and errors retain honest badges", () => {
-  assert.ok(worker.includes('text: status === "HTTP_200" ? "ON"'));
+  assert.ok(worker.includes('badge = "ON"'));
   assert.ok(!worker.includes('text: status === "HTTP_200" ? "BG"'));
-  assert.ok(worker.includes('denied ? "403" : "ERR"'));
+  assert.ok(worker.includes('badge = "TAB"'));
+  assert.ok(worker.includes('badge = "429"'));
+  assert.ok(worker.includes('badge = "OFF"'));
   assert.ok(worker.includes("Trump Monitor ON"));
   assert.equal(manifest.name,"Trade Alert - Trump Monitor");
   assert.equal(manifest.version,"0.2.1");
