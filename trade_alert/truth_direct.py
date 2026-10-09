@@ -285,11 +285,13 @@ async def read_direct_once(config: Config, store: StateStore, *,
         text = post.text[:450] or "[Ingen inläggstext]"
         ocr_label = ("\n[Bildtext via lokal OCR] " + image_text[:650]) if image_text else ""
         body = (
-            f"Trump · {signal.priority} / {signal.category} · Truth Social offentligt inlägg\n{text}{ocr_label}\n"
+            f"Trump · {signal.priority} / {signal.category} · Truth Social offentligt inlägg\n"
+            f"Evidens: {evidence.event_kind} · EJ KONTROLLERAD\n"
+            f"{text}{ocr_label}\n"
             f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
             f" · upptäckt +{int(max(0, age))} s\n"
-            f"Evidens: {evidence.event_kind} · {evidence.reason}\n"
-            "Oberoende bekräftelse: EJ KONTROLLERAD. Ett nytt inlägg är inte bevis på en ny händelse."
+            f"Bedömning: {evidence.reason}\n"
+            "Ett nytt inlägg är inte bevis på en ny händelse."
         )
         inserted = store.record_alert(
             item_key=key, source="TRUTH_PUBLIC",
