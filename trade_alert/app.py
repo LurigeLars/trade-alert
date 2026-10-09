@@ -168,6 +168,14 @@ async def run_once(
         dtv_since=dtv_since,
     )
     now = time.time()
+    store.mark_source_observations(
+        [
+            (item.dedupe_key, item.source)
+            for item in items
+            if item.source == "DTV_NEWS_FLOW"
+        ],
+        at=now,
+    )
     notified = 0
     fresh = 0
 
@@ -193,6 +201,7 @@ async def run_once(
                 body=body,
                 score=score,
                 published=item.published,
+                dedupe_key=item.dedupe_key,
                 link=item.link,
                 at=now,
             )
