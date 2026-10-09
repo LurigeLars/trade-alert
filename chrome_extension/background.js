@@ -133,9 +133,7 @@ async function ingest(posts) {
         visibility: "public",
         account: {id: ID, username: NAME, acct: NAME},
         content: p.content.slice(0, 10000),
-        media_attachments: Array.isArray(p.media_attachments)
-          ? p.media_attachments.slice(0, 1).map(x => ({type: x.type}))
-          : []
+        media_attachments: sanitizedMedia(p.media_attachments)
       });
     }
   }
