@@ -51,6 +51,7 @@ jobs:
           node --test .\tests\test_chrome_extension.cjs
           node --test .\tests\test_chrome_relay.cjs
           node --test .\tests\test_chrome_popup.cjs
+          node --test .\tests\test_chrome_single_poller.cjs
 
 
       - name: PowerShell syntax
