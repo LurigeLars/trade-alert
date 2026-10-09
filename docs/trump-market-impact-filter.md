@@ -24,7 +24,7 @@ unrelated TradingView provider headlines.
 | FISCAL | Congress, debt ceiling, government shutdown, budgets, taxes | Shutdown/default or a concrete fiscal policy action |
 | DEFENSE | NATO, Pentagon, troops, missiles, invasion | Concrete troop/military posture or action |
 | TECH | semiconductors, chipmakers, Nvidia, advanced chips, AI | Chip/semiconductor trade controls, bans or security restrictions |
-| GEOPOLITICS | Iran, Hormuz, China, Russia, Ukraine, Israel, Taiwan | Meaningful conflict/blockade/sanctions/ceasefire statement |
+| GEOPOLITICS | Iran, Hormuz, Cuba/Havana, Venezuela/Caracas, China, Russia, Ukraine, Israel, Taiwan | Meaningful conflict/blockade/sanctions/ceasefire statement |
 
 Legacy direct-watch trigger words (oil, Iran, Venezuela, tariffs,
 nuclear and related terms) continue to count as relevant at STANDARD level

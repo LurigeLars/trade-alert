@@ -29,7 +29,7 @@ class TrumpSignal:
 # Keep the previous direct/Chrome policy watchlist. Match singular/plural
 # inflections deliberately instead of matching inside unrelated words.
 LEGACY_POLICY = re.compile(
-    r"\b(?:iran|hormuz|venezuela|russia|ukraine|israel|china|taiwan|"
+    r"\b(?:iran|hormuz|venezuela|caracas|cuba|havana|russia|ukraine|israel|china|taiwan|"
     r"tariffs?|sanctions?|embargo|blockade|oil|gasoline|crude|energy|"
     r"nuclear|federal reserve|interest rates?|attack|strikes?|"
     r"war|military|opec|trade deal|ceasefire)\b", re.IGNORECASE
@@ -69,7 +69,7 @@ TECH_CONTEXT = _words(
 )
 GEO = _words(
     "iran", "tehran", "hormuz", "russia", "ukraine", "israel",
-    "taiwan", "venezuela", "north korea", "middle east",
+    "taiwan", "venezuela", "caracas", "cuba", "havana", "north korea", "middle east",
     "china", "ceasefire", "blockade", "nuclear",
 )
 ENERGY = _words(
