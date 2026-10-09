@@ -207,7 +207,7 @@ async def read_rss_once(config: Config, store: StateStore, *,
         score = signal.score
         if score < config.notification_min_score:
             continue
-        body = (f"Trump · {signal.priority} / {signal.category} · RSS-arkiv (ej verifierad primärkälla)\n"
+        body = (f"Trump · {signal.priority} / {signal.category} · oberoende RSS-arkiv (ej verifierad primärkälla)\n"
                 + post.text[:600]
                 + "\nPublicerad enligt RSS "
                 + datetime.fromtimestamp(post.published).astimezone().strftime("%H:%M:%S")
