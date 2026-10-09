@@ -15,7 +15,8 @@ from pathlib import Path
 from .config import Config
 from .notifier import notify
 from .state import StateStore
-from .truth_direct import DirectUnavailable, _relevance, parse_statuses
+from .truth_direct import DirectUnavailable, parse_statuses
+from .trump_filter import classify_trump_statement
 
 POST_FILENAME = re.compile(r"^post-([0-9]{10,24})\.json$")
 MAX_FILE_BYTES = 16384
@@ -72,10 +73,11 @@ def poll_browser_feed(
                 # possible to assess the content of video/images as text.
                 logging.info("Chrome post %s has only media; cannot classify", post.post_id)
                 continue
-            score = _relevance(post.text)
+            signal = classify_trump_statement(post.text)
+            score = signal.score
             if score < config.notification_min_score:
                 continue
-            body = (f"Trump · Chrome-källa (inte oberoende verifierad)\n"
+            body = (f"Trump · {signal.priority} / {signal.category} · Chrome-källa\n"
                     f"{post.text[:650]}\n"
                     f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
                     f" · mottagen +{int(max(0, age))} sek\n"
@@ -95,7 +97,7 @@ def poll_browser_feed(
                     alert_callback(store.unread_alert_count())
                 except Exception:
                     logging.exception("Chrome bridge unread callback failed")
-            if notification("Trade Alert · Trump Chrome", body):
+            if notification(f"Trade Alert · Trump {signal.priority} · {signal.category}", body):
                 stats["notified"] += 1
             else:
                 logging.error("Chrome bridge alert stored but Windows toast failed")
