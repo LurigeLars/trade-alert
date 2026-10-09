@@ -4,13 +4,19 @@ import time
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from trade_alert.app import run_once
+from trade_alert.app import _dtv_since_with_overlap, run_once
 from trade_alert.config import Config
 from trade_alert.news import Headline
 from trade_alert.state import StateStore
 
 
 class AppTests(unittest.IsolatedAsyncioTestCase):
+    def test_dtv_cursor_replays_overlap_window(self):
+        self.assertEqual(
+            "2026-10-08T22:30:00+00:00",
+            _dtv_since_with_overlap("2026-10-08T23:30:00+00:00", 3600),
+        )
+
     async def test_qualifying_signal_is_persisted_and_updates_unread_callback(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StateStore(pathlib.Path(tmp) / "state.db")
@@ -62,6 +68,38 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
                 self.assertEqual(0, result["notified"])
                 self.assertEqual(1, store.unread_alert_count())
+            finally:
+                store.close()
+
+    async def test_cross_source_duplicate_item_alerts_only_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            published = time.time()
+            dtv = Headline(
+                source="DTV_NEWS_FLOW",
+                item_id="te_news:590623:0",
+                title="Oil Prices Ease on Trump remarks about Iran",
+                published=published,
+                provider="Trading Economics",
+            )
+            official = Headline(
+                source="TV:ICEEUR:BRN1!",
+                item_id="te_news:590623:0",
+                title="Brent Eases on Trump remarks about Iran",
+                published=published,
+                provider="Trading Economics",
+            )
+            try:
+                with patch(
+                    "trade_alert.app._collect",
+                    new=AsyncMock(return_value=([dtv, official], True, True, True)),
+                ), patch("trade_alert.app.notify", return_value=True) as mocked_notify:
+                    result = await run_once(Config(), store)
+
+                self.assertEqual(1, result["notified"])
+                self.assertEqual(1, store.unread_alert_count())
+                self.assertEqual(1, mocked_notify.call_count)
+                self.assertTrue(store.seen_item("trading economics|te_news:590623:0"))
             finally:
                 store.close()
 
