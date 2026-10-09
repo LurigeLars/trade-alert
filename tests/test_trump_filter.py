@@ -91,6 +91,59 @@ class TrumpMarketImpactTests(unittest.TestCase):
             result = classify_trump_statement(text)
             self.assertEqual(result.priority, "IGNORE", text)
 
+    def test_military_english_terms_standard_without_concrete_action(self):
+        statements = (
+            "Our Navy is impressive.",
+            "The naval fleet has a proud history.",
+            "These warships are remarkable.",
+            "The Air Force has dedicated personnel.",
+            "Our airforce is well trained.",
+            "The Army and armed forces deserve recognition.",
+            "The armies of Europe have a long history.",
+            "War and warfare are tragic.",
+            "The bomb museum is fascinating.",
+            "I saw a bomber and bombers on display.",
+            "The military operations were discussed.",
+            "The aircraft carrier visited the port.",
+        )
+        for statement in statements:
+            with self.subTest(statement=statement):
+                self.check(statement, "DEFENSE", "STANDARD", 2)
+
+    def test_military_action_terms_are_high_urgency(self):
+        statements = (
+            "We are bombing Cuba tonight.",
+            "The US bombed targets near Havana.",
+            "We will bomb Venezuela tonight.",
+            "We will not bomb Venezuela before the election.",
+            "Our bombers deployed to Iran.",
+            "We launched airstrikes against the enemy.",
+            "We are ordering air strikes on military targets.",
+            "The Navy has deployed a fleet near Cuba.",
+            "We are deploying our Air Force to Venezuela.",
+            "Our army is invading the region.",
+            "We have declared war on another country.",
+            "War has begun following the invasion.",
+            "We are bombarding enemy positions.",
+            "The bombardment has begun.",
+        )
+        for statement in statements:
+            with self.subTest(statement=statement):
+                self.check(statement, "DEFENSE", "HIGH", 6)
+
+    def test_military_partial_word_false_positives_are_ignored(self):
+        statements = (
+            "This was a bombshell interview.",
+            "Our annual award ceremony was spectacular.",
+            "I attended a Navyblue fashion show.",
+            "My favorite song is Warpaint.",
+            "The armyworm damaged my garden.",
+            "Our flowers are blooming today.",
+        )
+        for statement in statements:
+            with self.subTest(statement=statement):
+                self.assertEqual(classify_trump_statement(statement).priority, "IGNORE")
+
     def test_irrelevant_speech_and_potato_chips_are_not_alerts(self):
         for text in [
             "The crowds were wonderful tonight. Thank you all.",
