@@ -160,6 +160,7 @@ async function ingest(posts) {
       // next healthy source fetch while it remains within the freshness window.
       failed++;
       console.warn("Trade Alert local transfer failed:", err?.message || "unknown");
+      if (unauthorized) break; // No further attempts with a revoked token.
     }
   }
   // Store source cursor only for delivered/new old posts, never for a
