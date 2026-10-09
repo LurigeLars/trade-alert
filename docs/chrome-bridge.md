@@ -303,6 +303,26 @@ graphics and a historical screenshot does not establish current price truth.
 A simple mention of oil in an image is STANDARD, not automatically HIGH.
 No trades are executed.
 
+**OCR layout fallback (v0.5.1):** A real Trump oil graphic initially
+returned only `308 0 83 24` with Tesseract's whole-image PSM 11.
+Trade Alert now combines whole-image OCR with bounded upper-banner,
+middle-region and lower-region scans (PSM 6/11), sharing an 8-second
+OCR time budget. This recovers a headline such as
+`DAYS WITH CRUDE OIL ABOVE $100` without depending on full-image
+text layout. Region OCR is heuristic and may still misread images.
+
+Test against a **local file**, entirely offline, after updating and
+restarting Trade Alert:
+
+    .\.venv\Scripts\python.exe -m trade_alert.media_ocr "$env:USERPROFILE\Downloads\oil-test.png"
+
+Expected on the known oil graphic: `Prioritet: STANDARD`,
+`Kategori: ENERGY` and a nonzero `Poäng` (normally at least 4).
+This tests OCR and classification, not the live Chrome-to-Windows
+transfer; the real-image path must still be verified separately.
+The basic `python -m trade_alert.media_ocr` command still reports
+whether local OCR is installed.
+
 **Fail/degraded behavior:** If local Tesseract is not installed, the
 image cannot be reached, the format is invalid, or OCR times out, logs
 record `OCR_UNAVAILABLE`/`OCR_FAILED`; the monitor continues analyzing

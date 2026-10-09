@@ -71,8 +71,46 @@ class ImageOCRTests(unittest.TestCase):
         self.assertEqual(classification.priority, "STANDARD")
         args, kwargs = run.call_args
         self.assertEqual(args[0][0], "tesseract")
-        self.assertEqual(kwargs["timeout"], 6)
+        self.assertGreater(kwargs["timeout"], 0)
+        self.assertLessEqual(kwargs["timeout"], 3)
+        self.assertEqual(run.call_count, 4)
         self.assertEqual(kwargs["stderr"], subprocess.DEVNULL)
+
+    def test_region_fallback_recovers_title_from_graphic_layout(self):
+        # Regression of a public oil poster: psm=11 reads only the large
+        # numbers, while a focused top-band psm=6 recovers its headline.
+        calls = []
+        def simulated_tesseract(args, **kwargs):
+            frame = Image.open(io.BytesIO(kwargs["input"]))
+            mode = args[-1]
+            calls.append((frame.size, mode, kwargs["timeout"]))
+            if frame.height == 96 and mode == "11":
+                contents = b"308 0 83 24\\n"
+            elif frame.height <= 26 and mode == "6":
+                contents = b"DAYS WITH CRUDE OIL ABOVE $100\\n"
+            else:
+                contents = b""
+            return subprocess.CompletedProcess(args=args, returncode=0,
+                                               stdout=contents)
+        with patch("trade_alert.media_ocr.subprocess.run",
+                   side_effect=simulated_tesseract):
+            text = recognize_image_bytes(picture(), executable="tesseract")
+        self.assertIn("308", text)
+        self.assertIn("CRUDE OIL ABOVE $100", text)
+        self.assertEqual(len(calls), 4)
+        self.assertEqual([mode for _, mode, _ in calls],
+                         ["11", "6", "11", "6"])
+        self.assertTrue(all(0 < budget <= 3 for _, _, budget in calls))
+        from trade_alert.trump_filter import classify_trump_statement
+        signal = classify_trump_statement(text)
+        self.assertEqual((signal.priority, signal.category),
+                         ("STANDARD", "ENERGY"))
+
+    def test_all_ocr_passes_failing_are_reported_as_unavailable(self):
+        with patch("trade_alert.media_ocr.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired(["tesseract"], 3)):
+            with self.assertRaises(OCRUnavailable):
+                recognize_image_bytes(picture(), executable="tesseract")
 
     def test_missing_executable_is_explicitly_unavailable(self):
         with patch("trade_alert.media_ocr.tesseract_path", return_value=None):
