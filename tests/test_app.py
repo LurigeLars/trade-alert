@@ -103,6 +103,33 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 store.close()
 
+    async def test_dtv_observation_is_recorded_before_seen_dedupe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            item = Headline(
+                source="DTV_NEWS_FLOW",
+                item_id="story-observed",
+                title="Oil rises after Iran supply disruption",
+                published=time.time(),
+                provider="Reuters",
+            )
+            store.mark_seen(item.key, at=time.time() - 10)
+            store.mark_seen_item(item.dedupe_key, at=time.time() - 10)
+            try:
+                with patch(
+                    "trade_alert.app._collect",
+                    new=AsyncMock(return_value=([item], True, False, True)),
+                ), patch("trade_alert.app.notify", return_value=True) as mocked_notify:
+                    result = await run_once(Config(), store, include_official=False)
+
+                self.assertEqual(0, result["notified"])
+                mocked_notify.assert_not_called()
+                self.assertIsNotNone(
+                    store.source_first_seen(item.dedupe_key, "DTV_NEWS_FLOW")
+                )
+            finally:
+                store.close()
+
     async def test_first_dtv_news_flow_cycle_baselines_old_broad_headlines(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StateStore(pathlib.Path(tmp) / "state.db")
