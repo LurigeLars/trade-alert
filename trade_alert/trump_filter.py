@@ -56,6 +56,16 @@ DEFENSE = _words(
     "nato", "pentagon", "missile", "missiles", "airstrike", "airstrikes",
     "troops", "troop", "invasion", "military", "nuclear weapon",
     "nuclear weapons", "defense spending", "defence spending",
+    # Armed services, formations and equipment. Names alone are STANDARD.
+    "navy", "naval", "fleet", "fleets", "warship", "warships",
+    "air force", "air forces", "airforce", "army", "armies",
+    "armed forces", "ground forces", "fighter jet", "fighter jets",
+    "aircraft carrier", "aircraft carriers",
+    # Include literal English equivalents of bomb, bomber and war.
+    "bomb", "bombs", "bombed", "bombing", "bomber", "bombers",
+    "bombard", "bombards", "bombarded", "bombarding", "bombardment",
+    "air strike", "air strikes", "war", "wars", "warfare",
+    "military operation", "military operations",
 )
 TECH = _words(
     "semiconductor", "semiconductors", "chipmaker", "chipmakers",
@@ -126,8 +136,25 @@ DEFENSE_ACTION = re.compile(
     r"strike(?:s)?|striking|invad(?:e|es|ed|ing)|invasion|"
     r"defen(?:d|se)|mobiliz(?:e|es|ed|ing)|"
     r"cut(?:s|ting)?|raise|increase|end|halt|ceasefire|"
-    r"launch(?:es|ed|ing)?|blockade)\b",
+    r"launch(?:es|ed|ing)?|blockade|"
+    r"bomb(?:ed|ing)|bombard(?:s|ed|ing|ment)?|"
+    r"air\s?strikes?|air\s?raids?|"
+    r"dispatch(?:es|ed|ing)?|mobilis(?:e|es|ed|ing)|"
+    r"declar(?:e|es|ed|ing)\s+war|"
+    r"enter(?:s|ed|ing)?\s+(?:a\s+)?war|"
+    r"war\s+(?:begins|began|has\s+begun))\b",
     re.IGNORECASE,
+)
+
+
+# Bare nouns such as "a bomb", "bombers" or "war" trigger STANDARD.
+# Explicit intent (will bomb), a bombing action, or a war declaration is HIGH.
+BOMB_INTENT = re.compile(
+    r"\b(?:will|to|going to|plan to|plans to|intend to|intends to|may|"
+    r"might|could)\s+bomb\b", re.IGNORECASE,
+)
+BOMBING_VERB = re.compile(
+    r"\b(?:bombs|bombed|bombing)\b", re.IGNORECASE,
 )
 
 
@@ -168,7 +195,12 @@ def classify_trump_statement(text: str) -> TrumpSignal:
         candidates.append((7 if (FISCAL_CRISIS.search(excerpt) or
                                   POLICY_ACTION.search(excerpt)) else 2, "FISCAL"))
     if DEFENSE.search(excerpt):
-        candidates.append((7 if DEFENSE_ACTION.search(excerpt) else 2, "DEFENSE"))
+        military_action = bool(
+            DEFENSE_ACTION.search(excerpt)
+            or BOMB_INTENT.search(excerpt)
+            or BOMBING_VERB.search(excerpt)
+        )
+        candidates.append((7 if military_action else 2, "DEFENSE"))
 
     # Avoid category inflation from overlapping keywords; HIGH requires a
     # concrete impact-bearing context in one category, not unrelated nouns.
