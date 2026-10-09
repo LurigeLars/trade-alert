@@ -8,8 +8,29 @@
   const forward = event => {
     if (event.source !== window || event.origin !== location.origin) return;
     const msg = event.data;
-    if (!msg || msg.channel !== ch ||
-        (msg.type !== "posts" && msg.type !== "health")) return;
+    if (!msg || msg.channel !== ch) return;
+    if (msg.type === "monitor-mode-query") {
+      const requestId = msg.requestId;
+      if (!Number.isSafeInteger(requestId) || requestId < 1) return;
+      // Only the isolated content script can query the extension's state.
+      // The page receives a boolean, never cookies or extension storage.
+      void (async () => {
+        let allowed = false;
+        try {
+          const response = await chrome.runtime.sendMessage({kind: "monitor_mode"});
+          allowed = response?.tabAllowed === true;
+        } catch {
+          // Old content-script contexts can become invalid after reload.
+          // Fail closed: never add a second browser poller.
+        }
+        window.postMessage({
+          channel: ch, type: "monitor-mode-response",
+          requestId, tabAllowed: allowed
+        }, location.origin);
+      })();
+      return;
+    }
+    if (msg.type !== "posts" && msg.type !== "health") return;
     if (msg.type === "posts" &&
         (!Array.isArray(msg.posts) || msg.posts.length > 25)) return;
     const safe = msg.type === "health"

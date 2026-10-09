@@ -22,14 +22,46 @@
   let failures = 0;
   let stopped = false;
 
+  const CHANNEL = "trade-alert-public-feed-v1";
   const report = (type, payload) => window.postMessage({
-    channel: "trade-alert-public-feed-v1",
+    channel: CHANNEL,
     type,
     ...payload
   }, location.origin);
 
+  let requestId = 0;
+  function mayFetchInTab() {
+    // The service worker is authoritative for source mode. Request its state
+    // BEFORE any page-context fetch; fail closed if the bridge is unavailable.
+    return new Promise(resolve => {
+      const id = ++requestId;
+      let timer;
+      const onAnswer = event => {
+        if (event.source !== window || event.origin !== location.origin ||
+            event.data?.channel !== CHANNEL ||
+            event.data?.type !== "monitor-mode-response" ||
+            event.data?.requestId !== id) return;
+        clearTimeout(timer);
+        window.removeEventListener("message", onAnswer);
+        resolve(event.data.tabAllowed === true);
+      };
+      window.addEventListener("message", onAnswer);
+      timer = setTimeout(() => {
+        window.removeEventListener("message", onAnswer);
+        resolve(false);
+      }, 2500);
+      report("monitor-mode-query", {requestId: id});
+    });
+  }
+
   async function poll() {
     if (stopped || location.origin !== "https://truthsocial.com") return;
+    // Background monitoring takes priority. An opened account tab must not
+    // double the account API request rate when the background alarm is active.
+    if (!(await mayFetchInTab())) {
+      setTimeout(poll, INTERVAL_MS);
+      return;
+    }
     try {
       const start = performance.now();
       const response = await fetch(API, {
