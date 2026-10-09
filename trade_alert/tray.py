@@ -165,6 +165,12 @@ def format_alert_history(alerts: list[AlertRecord], unread_count: int) -> str:
                 f"[{marker}] registrerad {timestamp} · {provider} · relevans {alert.score}",
                 alert.headline,
                 f"Publicerad: {published}",
+                (
+                    f"DTV först sedd: {_local_timestamp(alert.dtv_first_seen)}"
+                    if alert.dtv_first_seen is not None
+                    else "DTV först sedd: inte observerad med samma provider-ID"
+                ),
+                f"Alert registrerad: {timestamp}",
                 f"Källa: {alert.source}",
             ]
         )

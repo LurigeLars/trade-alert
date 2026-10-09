@@ -110,6 +110,7 @@ class TrayTests(unittest.TestCase):
             item_key="a",
             created_at=100.0,
             published=90.0,
+            dtv_first_seen=95.0,
             source="TV:ICEEUR:BRN1!",
             provider="Reuters",
             headline="A complete oil market headline",
@@ -123,6 +124,8 @@ class TrayTests(unittest.TestCase):
         self.assertIn("A complete oil market headline", text)
         self.assertIn("Reuters", text)
         self.assertIn("relevans 4", text)
+        self.assertIn("DTV först sedd:", text)
+        self.assertIn("Alert registrerad:", text)
         self.assertIn("https://example.test/story", text)
 
 

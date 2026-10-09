@@ -47,6 +47,55 @@ class StateTests(unittest.TestCase):
             finally:
                 reopened.close()
 
+    def test_source_observation_is_first_seen_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            try:
+                key = "trading economics|te_news:590624:0"
+                store.mark_source_observations(
+                    [(key, "DTV_NEWS_FLOW")],
+                    at=100.0,
+                )
+                store.mark_source_observations(
+                    [(key, "DTV_NEWS_FLOW")],
+                    at=200.0,
+                )
+                self.assertEqual(
+                    100.0,
+                    store.source_first_seen(key, "DTV_NEWS_FLOW"),
+                )
+            finally:
+                store.close()
+
+    def test_alert_history_joins_dtv_first_seen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            try:
+                dedupe_key = "trading economics|te_news:590624:0"
+                store.mark_source_observations(
+                    [(dedupe_key, "DTV_NEWS_FLOW")],
+                    at=110.0,
+                )
+                self.assertTrue(
+                    store.record_alert(
+                        item_key="TV:ICEEUR:BRN1!:te_news:590624:0",
+                        dedupe_key=dedupe_key,
+                        source="TV:ICEEUR:BRN1!",
+                        provider="Trading Economics",
+                        headline="Brent Eases on Trump remarks about Iran",
+                        body="body",
+                        score=5,
+                        published=90.0,
+                        at=120.0,
+                    )
+                )
+                row = store.recent_alerts(limit=1)[0]
+                self.assertEqual(90.0, row.published)
+                self.assertEqual(110.0, row.dtv_first_seen)
+                self.assertEqual(120.0, row.created_at)
+            finally:
+                store.close()
+
     def test_alert_history_persists_unread_and_marks_only_selected_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StateStore(pathlib.Path(tmp) / "state.db")

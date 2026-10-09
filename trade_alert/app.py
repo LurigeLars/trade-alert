@@ -168,6 +168,14 @@ async def run_once(
         dtv_since=dtv_since,
     )
     now = time.time()
+    store.mark_source_observations(
+        [
+            (item.dedupe_key, item.source)
+            for item in items
+            if item.source == "DTV_NEWS_FLOW"
+        ],
+        at=now,
+    )
     notified = 0
     fresh = 0
 
@@ -193,9 +201,25 @@ async def run_once(
                 body=body,
                 score=score,
                 published=item.published,
+                dedupe_key=item.dedupe_key,
                 link=item.link,
                 at=now,
             )
+            if inserted:
+                dtv_first_seen = store.source_first_seen(
+                    item.dedupe_key,
+                    "DTV_NEWS_FLOW",
+                )
+                logging.info(
+                    "news-latency provider=%r item_id=%r published=%s "
+                    "dtv_first_seen=%s alert_registered=%s source=%s",
+                    item.provider,
+                    item.item_id,
+                    item.published,
+                    dtv_first_seen,
+                    now,
+                    item.source,
+                )
             if inserted and alert_callback is not None:
                 try:
                     alert_callback(store.unread_alert_count())
