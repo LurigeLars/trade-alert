@@ -61,6 +61,37 @@ class TrumpMarketImpactTests(unittest.TestCase):
                 self.assertEqual(result.priority, "STANDARD")
                 self.assertGreaterEqual(result.score, 2)
 
+    def test_cuba_venezuela_and_capitals_standard_without_policy_action(self):
+        for text in (
+            "We discussed Cuba in today's meeting.",
+            "Diplomatic meetings in Havana are underway.",
+            "The situation in Venezuela is being monitored.",
+            "I spoke about Caracas yesterday.",
+        ):
+            with self.subTest(statement=text):
+                self.check(text, "GEOPOLITICS", "STANDARD", 4)
+
+    def test_cuba_venezuela_sanctions_and_military_actions_high(self):
+        for text, category in (
+            ("We are imposing sanctions on Cuba immediately.", "TRADE"),
+            ("We are attacking Venezuela tonight.", "GEOPOLITICS"),
+            ("New sanctions on Caracas take effect immediately.", "TRADE"),
+            ("We are imposing a blockade on Havana.", "GEOPOLITICS"),
+        ):
+            with self.subTest(statement=text):
+                self.check(text, category, "HIGH", 6)
+
+    def test_cuba_word_boundaries_and_irrelevant_lookalikes(self):
+        for text in (
+            "I enjoyed the Cuban sandwich.",
+            "The cubature of the shapes is fascinating.",
+            "This is just a beautiful Havana-style cigar box.",
+        ):
+            # Cuban/Havana-style are not included as standalone policy terms.
+            # If adding demonyms later, these cases need a context gate.
+            result = classify_trump_statement(text)
+            self.assertEqual(result.priority, "IGNORE", text)
+
     def test_irrelevant_speech_and_potato_chips_are_not_alerts(self):
         for text in [
             "The crowds were wonderful tonight. Thank you all.",
