@@ -54,6 +54,7 @@ FISCAL = _words(
 )
 DEFENSE = _words(
     "nato", "pentagon", "missile", "missiles", "airstrike", "airstrikes",
+    "air defense", "air defence", "defense systems", "defence systems",
     "troops", "troop", "invasion", "military", "nuclear weapon",
     "nuclear weapons", "defense spending", "defence spending",
     # Armed services, formations and equipment. Names alone are STANDARD.
