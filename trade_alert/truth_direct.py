@@ -264,7 +264,7 @@ async def read_direct_once(config: Config, store: StateStore, *,
             continue
         text = post.text[:700]
         body = (
-            f"Trump · {signal.priority} / {signal.category} · offentligt inlägg\n{text}\n"
+            f"Trump · {signal.priority} / {signal.category} · Truth Social offentligt inlägg\n{text}\n"
             f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
             f" · upptäckt +{int(max(0, age))} s\n"
             "Direkt källa; påståenden ej oberoende verifierade."
