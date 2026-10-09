@@ -19,6 +19,7 @@ from typing import Callable
 
 from .config import Config
 from .trump_filter import classify_trump_statement
+from .media_ocr import extract_image_text, image_url_from_post
 from .notifier import notify
 from .state import StateStore
 
@@ -110,6 +111,7 @@ class DirectPost:
     published: float
     link: str
     media_only: bool = False
+    media_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -183,6 +185,7 @@ def parse_statuses(data: bytes, *, fetched_at: float) -> DirectResult:
         output.append(DirectPost(
             post_id=post_id, text=text, published=published, link=url,
             media_only=media_only,
+            media_url=image_url_from_post(row),
         ))
     if rows and not output:
         raise DirectUnavailable("No statuses passed account identity/content verification")
@@ -255,16 +258,29 @@ async def read_direct_once(config: Config, store: StateStore, *,
         age = moment - post.published
         if initial or age > config.truth_direct_max_age_seconds or age < -120:
             continue
-        if post.media_only:
+        image_text = ""
+        if post.media_url:
+            image_text, ocr_status = await asyncio.to_thread(
+                extract_image_text, {
+                    "media_attachments": [{"type": "image", "url": post.media_url}]
+                }
+            )
+            if ocr_status != "OCR_OK":
+                logging.warning("Direct image post %s OCR: %s", post.post_id, ocr_status)
+                media_skipped += 1
+        elif post.media_only:
             media_skipped += 1
+        if not post.text and not image_text:
             continue
-        signal = classify_trump_statement(post.text)
+        analysis_text = " ".join(x for x in (post.text, image_text) if x)
+        signal = classify_trump_statement(analysis_text)
         score = signal.score
         if score < config.notification_min_score:
             continue
-        text = post.text[:700]
+        text = post.text[:450] or "[Ingen inläggstext]"
+        ocr_label = ("\n[Bildtext via lokal OCR] " + image_text[:650]) if image_text else ""
         body = (
-            f"Trump · {signal.priority} / {signal.category} · Truth Social offentligt inlägg\n{text}\n"
+            f"Trump · {signal.priority} / {signal.category} · Truth Social offentligt inlägg\n{text}{ocr_label}\n"
             f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
             f" · upptäckt +{int(max(0, age))} s\n"
             "Direkt källa; påståenden ej oberoende verifierade."
@@ -272,7 +288,7 @@ async def read_direct_once(config: Config, store: StateStore, *,
         inserted = store.record_alert(
             item_key=key, source="TRUTH_PUBLIC",
             provider="Truth Social public account",
-            headline=text[:240], body=body, score=score,
+            headline=analysis_text[:240], body=body, score=score,
             published=post.published, link=post.link, at=moment,
         )
         if not inserted:
