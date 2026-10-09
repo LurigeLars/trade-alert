@@ -212,13 +212,13 @@ async def read_rss_once(config: Config, store: StateStore, *,
         score = signal.score
         if score < config.notification_min_score:
             continue
-        body = (f"Trump · {signal.priority} / {signal.category} · oberoende RSS-arkiv (ej verifierad primärkälla)\n"
+        body = (f"Trump · {signal.priority} / {signal.category} · tredjeparts-RSS\n"
+                + f"Evidens: {evidence.event_kind} · EJ KONTROLLERAD\n"
                 + post.text[:600]
                 + "\nPublicerad enligt RSS "
                 + datetime.fromtimestamp(post.published).astimezone().strftime("%H:%M:%S")
                 + f" · upptäckt +{int(max(0, age))} sek"
-                + f"\nEvidens: {evidence.event_kind} · {evidence.reason}"
-                + "\nOberoende bekräftelse: EJ KONTROLLERAD.")
+                + f"\nBedömning: {evidence.reason}")
         inserted = store.record_alert(
             item_key=key, source="TRUMP_TRUTH_RSS",
             provider="Trump's Truth RSS (third party)",
