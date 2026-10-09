@@ -12,14 +12,21 @@ function show(response) {
   }
   const label = response.status || "NOT_TESTED";
   const enabled = response.enabled === true;
+  const cooldown = Number(response.cooldown_until || 0) > Date.now();
+  const tabAge = Date.now() - Date.parse(response.tab_checked || "");
+  const tabActive = !enabled && !cooldown &&
+    response.tab_status === "HTTP_200" &&
+    Number.isFinite(tabAge) && tabAge >= 0 && tabAge <= 120000;
   el.textContent =
     "Background monitor: " + (enabled ? "ON" : "OFF") +
-    "\nLast status: " + label +
-    (Number.isFinite(response.count) ? "\nVerified posts: " + response.count : "") +
-    (response.checked ? "\nLast checked: " +
+    "\nLast background status: " + label +
+    (response.checked ? "\nBackground checked: " +
       new Date(response.checked).toLocaleTimeString("en-GB") : "") +
-    (Number(response.cooldown_until || 0) > Date.now()
-      ? "\nRate limited: paused until " +
+    "\nTab backup: " + (enabled ? "STANDBY" : tabActive ? "ACTIVE" : "INACTIVE") +
+    (response.tab_checked ? "\nLast tab status: " + response.tab_status +
+      " (" + new Date(response.tab_checked).toLocaleTimeString("en-GB") + ")" : "") +
+    (Number.isFinite(response.count) ? "\nVerified posts: " + response.count : "") +
+    (cooldown ? "\nRate limited: paused until " +
         new Date(response.cooldown_until).toLocaleTimeString("en-GB")
       : "");
 }
@@ -31,7 +38,8 @@ async function action(kind) {
   try {
     const response = await call(kind);
     if (kind === "open_tab") window.close();
-    else show(response);
+    else if (kind === "background_status") show(response);
+    else show(await call("background_status"));
   } catch {
     el.textContent = "Could not communicate with the extension.";
   } finally {
