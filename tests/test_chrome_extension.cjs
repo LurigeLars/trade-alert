@@ -254,3 +254,19 @@ test("Tab-visible HTTP 429 also pauses future tab and background fetching", asyn
   assert.equal((await h.send({kind:"monitor_mode"})).tabAllowed,false);
   assert.ok(state.cooldown_until > Date.now() + 29*60*1000);
 });
+
+
+test("A tab-observed 429 shuts down an otherwise active background monitor", async () => {
+  const h=harness();
+  h.setFetch(async () => ({
+    ok:true, status:200, headers:{get() {return null;}},
+    async text() {return JSON.stringify([original]);}
+  }));
+  assert.equal((await h.popup("background_test")).enabled,true);
+  assert.equal(h.alarms.size,1);
+  await h.send({kind:"health",status:"HTTP_429"});
+  assert.equal((await h.popup("background_status")).enabled,false);
+  assert.equal((await h.send({kind:"monitor_mode"})).tabAllowed,false);
+  assert.equal(h.alarms.size,0);
+  assert.equal(h.badges.at(-1),"429");
+});
