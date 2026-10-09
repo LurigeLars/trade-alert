@@ -405,3 +405,50 @@ test("Invalid token revokes local authorization and never marks post delivered",
   assert.equal(again.status,"PAIR_REQUIRED");
   assert.equal(h.transfers.length,1);
 });
+
+
+test("Image URLs reach local bridge only from approved Truth Social CDN", async () => {
+  const h=harness();
+  await h.send({kind:"posts",posts:[original]});
+  const next={
+    ...original,id:"117407758597840565",
+    content:"<p>The Dumocrats are Scammers. These are the real FACTS!</p>",
+    media_attachments:[{
+      type:"image",
+      url:"https://static-assets-1.truthsocial.com/media/files/example.png",
+      preview_url:"https://static-assets-2.truthsocial.com/media/thumb.png"
+    }]
+  };
+  const result=await h.send({kind:"posts",posts:[next]});
+  assert.equal(result.count,1);
+  const transferred=JSON.parse(h.transfers.at(-1).options.body);
+  assert.equal(transferred.media_attachments[0].type,"image");
+  assert.equal(transferred.media_attachments[0].url,next.media_attachments[0].url);
+  assert.equal(transferred.media_attachments[0].preview_url,
+               next.media_attachments[0].preview_url);
+  assert.ok(!("cookie" in transferred));
+  assert.ok(!("token" in transferred));
+});
+
+test("Image metadata from untrusted Truth Social page cannot create SSRF URL", async () => {
+  const h=harness();
+  await h.send({kind:"posts",posts:[original]});
+  const next={
+    ...original,id:"117407758597840565",
+    media_attachments:[
+      {type:"image",url:"http://127.0.0.1:18761/chrome-pair",
+       preview_url:"https://static-assets-1.truthsocial.com.attacker.test/p.png"},
+      {type:"image",url:"https://static-assets-2.truthsocial.com/good.png",
+       preview_url:"file:///C:/secret"}
+    ]
+  };
+  await h.send({kind:"posts",posts:[next]});
+  const transferred=JSON.parse(h.transfers.at(-1).options.body);
+  assert.equal(transferred.media_attachments.length,2);
+  assert.equal(transferred.media_attachments[0].type,"image");
+  assert.equal(transferred.media_attachments[0].url,undefined);
+  assert.equal(transferred.media_attachments[0].preview_url,undefined);
+  assert.equal(transferred.media_attachments[1].url,
+               "https://static-assets-2.truthsocial.com/good.png");
+  assert.equal(transferred.media_attachments[1].preview_url,undefined);
+});

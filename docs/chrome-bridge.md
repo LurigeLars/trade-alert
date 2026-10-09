@@ -266,6 +266,52 @@ to read extension credentials or forge requests. Local pairing is not a
 defense against a compromised Windows account. Treat public post content
 as untrusted regardless of source authentication.
 
+## Local public-image OCR (extension v0.5.0)
+
+Chrome and the verified direct public-account source can now extract **text inside
+image attachments**, not just the post caption. Example: a political caption
+with a chart reading "DAYS WITH CRUDE OIL ABOVE $100" is classified as
+**STANDARD / ENERGY** because "CRUDE OIL" appears in the image.
+
+This is **optional on-device OCR via Tesseract**, not a cloud AI service.
+No images are uploaded to an AI API. The Windows app fetches the original
+public attachment from a strict allowlist of
+`https://static-assets-[1-9].truthsocial.com` domains. It sends no
+cookies/authorization, rejects redirects, and permits only bounded JPEG,
+PNG and WebP content (up to 2 MiB and 16 million pixels).
+At most one approved image per post is scanned. No arbitrary post links,
+private files, videos or GIFs are fetched.
+
+**Install once on Windows if needed:** Tesseract OCR is a separate local
+application, not bundled in the Python project. Use a trusted installer,
+for example the Windows package:
+
+    winget install -e --id UB-Mannheim.TesseractOCR
+
+Then verify in the local repo (no network request):
+
+    .\.venv\Scripts\python.exe -m trade_alert.media_ocr
+
+The check must print `Local image OCR: READY`. Restart Trade Alert
+using `scripts/install-windows-startup.ps1`. Update/reload the unpacked
+Chrome extension at `chrome://extensions` to **version 0.5.0**; existing
+bridge pairing survives when the extension ID is unchanged.
+
+OCR text and the original caption are labelled separately in Windows alerts,
+with `[Bildtext via lokal OCR]`. OCR is *heuristic*: it can misread stylized
+graphics and a historical screenshot does not establish current price truth.
+A simple mention of oil in an image is STANDARD, not automatically HIGH.
+No trades are executed.
+
+**Fail/degraded behavior:** If local Tesseract is not installed, the
+image cannot be reached, the format is invalid, or OCR times out, logs
+record `OCR_UNAVAILABLE`/`OCR_FAILED`; the monitor continues analyzing
+any normal text. Image contents are not guessed, and an unscanned image is
+not reported as irrelevant with certainty. Media without an approved
+image URL remains unscanned. Old posts are not backfilled: the existing
+five-minute freshness and post-ID cursor still apply. This is not
+video understanding or guaranteed semantic analysis of photos with no text.
+
 ## Security and reliability limits
 
 - The extension can read the fixed public JSON endpoint only from its listed
@@ -280,8 +326,9 @@ as untrusted regardless of source authentication.
 - Full RSS monitoring remains enabled as fallback. Different source IDs may
   still cause duplicate coverage when both sources publish the same statement;
   evaluate live behavior before considering this production-ready.
-- Only text posts are classified. Media-only posts are recorded as seen and
-  skipped until separate image/video processing is developed.
+- Text in approved public image attachments is classified only when local OCR
+  is available. Video and unsupported media are not analyzed. A failure to
+  read an image is explicitly logged and must not be interpreted as no risk.
 - Trade Alert never submits orders or credentials.
 - Truth Social's contractual restrictions on automated collection still apply.
   Technical access does not imply provider permission. Use of this component

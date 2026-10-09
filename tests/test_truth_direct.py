@@ -45,6 +45,20 @@ class DirectParsingTests(unittest.TestCase):
         self.assertEqual(rows[0].link,
                          "https://truthsocial.com/@realDonaldTrump/117123456789012345")
 
+    def test_canonical_parser_preserves_only_approved_image_url(self):
+        row = post(text="The Dumocrats are scammers.")
+        row["media_attachments"] = [{
+            "type": "image",
+            "url": "https://static-assets-1.truthsocial.com/media/test.png"
+        }]
+        parsed = parse_statuses(fixture(row), fetched_at=T0).posts
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0].media_url,
+                         "https://static-assets-1.truthsocial.com/media/test.png")
+        row["media_attachments"][0]["url"] = "https://attacker.invalid/secret.png"
+        blocked = parse_statuses(fixture(row), fetched_at=T0).posts
+        self.assertIsNone(blocked[0].media_url)
+
     def test_wrong_account_private_bad_id_and_invalid_json_are_rejected(self):
         p = post(acct="impostor")
         with self.assertRaises(DirectUnavailable):
@@ -87,6 +101,31 @@ class DirectParsingTests(unittest.TestCase):
 
 
 class DirectIntakeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_direct_image_ocr_creates_energy_alert(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            try:
+                store.set_meta("truth_direct_initialized", "previous")
+                entry = DirectPost(
+                    "117123456789012345", "The Dumocrats are scammers.",
+                    T0, "https://truthsocial.com/@realDonaldTrump/117123456789012345",
+                    media_url="https://static-assets-1.truthsocial.com/media/test.png",
+                )
+                result = DirectResult((entry,), fetched_at=T0+3)
+                notices = []
+                with patch("trade_alert.truth_direct.extract_image_text",
+                           return_value=("DAYS WITH CRUDE OIL ABOVE $100", "OCR_OK")):
+                    outcome = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0+5,
+                        notification=lambda *args: notices.append(args) or True,
+                    )
+                self.assertEqual(outcome["alerted"], 1)
+                self.assertIn("ENERGY", notices[0][0])
+                self.assertIn("[Bildtext via lokal OCR]", notices[0][1])
+                self.assertIn("CRUDE OIL", notices[0][1])
+            finally:
+                store.close()
+
     async def test_baseline_new_post_and_no_duplicate(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StateStore(pathlib.Path(tmp) / "state.db")

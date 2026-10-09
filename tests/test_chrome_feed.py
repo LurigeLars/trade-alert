@@ -92,6 +92,62 @@ class ChromeBridgeTests(unittest.TestCase):
         self.assertEqual(a["alerts"], 0)
         self.assertTrue(self.store.seen("TRUTH_PUBLIC:" + ID1))
 
+    def test_image_text_triggers_energy_alert_when_caption_has_no_market_words(self):
+        image = {"type": "image",
+                 "url": "https://static-assets-1.truthsocial.com/media/test.png"}
+        caption = "The Dumocrats are scammers. These are the real facts."
+        emit(self.folder, row(ID1, self.now - 6, text=caption, media=[image]))
+        notices = []
+        with patch("trade_alert.chrome_feed.extract_image_text",
+                   return_value=("DAYS WITH CRUDE OIL ABOVE $100", "OCR_OK")) as ocr:
+            result = poll_browser_feed(
+                self.config, self.store, directory=self.folder, at=self.now,
+                notification=lambda *x: notices.append(x) or True,
+            )
+        self.assertEqual(result["alerts"], 1)
+        self.assertEqual(result["ocr_ok"], 1)
+        self.assertEqual(result["notified"], 1)
+        self.assertIn("ENERGY", notices[0][0])
+        self.assertIn("[Bildtext via lokal OCR]", notices[0][1])
+        self.assertIn("CRUDE OIL ABOVE $100", notices[0][1])
+        self.assertIn(caption, notices[0][1])
+        self.assertEqual(len(self.store.recent_alerts()), 1)
+        ocr.assert_called_once()
+        # Repeat the same post ID; no second OCR or duplicated alert.
+        emit(self.folder, row(ID1, self.now - 6, text=caption, media=[image]))
+        with patch("trade_alert.chrome_feed.extract_image_text",
+                   side_effect=AssertionError("unexpected OCR on a duplicate")):
+            again = poll_browser_feed(
+                self.config, self.store, directory=self.folder, at=self.now
+            )
+        self.assertEqual(again["duplicates"], 1)
+
+    def test_image_only_can_alert_if_ocr_finds_market_keywords(self):
+        image = {"type": "image",
+                 "url": "https://static-assets-1.truthsocial.com/media/test.png"}
+        emit(self.folder, row(ID1, self.now - 4, text="", media=[image]))
+        with patch("trade_alert.chrome_feed.extract_image_text",
+                   return_value=("CRUDE OIL ABOVE $100", "OCR_OK")):
+            result = poll_browser_feed(self.config, self.store,
+                                       directory=self.folder, at=self.now,
+                                       notification=lambda *args: True)
+        self.assertEqual(result["alerts"], 1)
+        self.assertEqual(result["ocr_ok"], 1)
+
+    def test_missing_ocr_is_recorded_as_degraded_not_misreported_as_no_relevance(self):
+        image = {"type": "image",
+                 "url": "https://static-assets-1.truthsocial.com/media/test.png"}
+        emit(self.folder, row(ID1, self.now - 4,
+                              text="Political speech with no market context",
+                              media=[image]))
+        with patch("trade_alert.chrome_feed.extract_image_text",
+                   return_value=("", "OCR_UNAVAILABLE")):
+            result = poll_browser_feed(self.config, self.store,
+                                       directory=self.folder, at=self.now)
+        self.assertEqual(result["ocr_unavailable"], 1)
+        self.assertEqual(result["alerts"], 0)
+        self.assertTrue(self.store.seen("TRUTH_PUBLIC:" + ID1))
+
     def test_config_opt_in_and_rejection_of_oversize(self):
         emit(self.folder, row(ID1, self.now - 4))
         off = Config(chrome_bridge_enabled=False)
