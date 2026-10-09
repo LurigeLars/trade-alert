@@ -160,6 +160,7 @@ test("Tab-free background request HTTP 200 enables periodic worker alarm", async
   const off=await h.popup("background_off");
   assert.equal(off.enabled,false);
   assert.equal(h.alarms.size,0);
+  assert.equal(h.badges.at(-1),"OFF");
 });
 
 test("HTTP 403 fails closed; cannot claim background monitoring", async () => {
@@ -172,9 +173,13 @@ test("HTTP 403 fails closed; cannot claim background monitoring", async () => {
   assert.equal(result.enabled,false);
   assert.equal(h.alarms.size,0);
   assert.equal(h.badges.at(-1),"403");
-  // The first-party tab reader still works in legacy mode.
+  // The first-party tab reader works, but must not impersonate BG.
   await h.send({kind:"health",status:"HTTP_200"});
-  assert.equal(h.badges.at(-1),"ON");
+  assert.equal(h.badges.at(-1),"TAB");
+  const state=await h.popup("background_status");
+  assert.equal(state.enabled,false);
+  assert.equal(state.status,"HTTP_403");
+  assert.equal(state.tab_status,"HTTP_200");
 });
 
 test("Background source without validated account data never enables", async () => {
@@ -269,4 +274,57 @@ test("A tab-observed 429 shuts down an otherwise active background monitor", asy
   assert.equal((await h.send({kind:"monitor_mode"})).tabAllowed,false);
   assert.equal(h.alarms.size,0);
   assert.equal(h.badges.at(-1),"429");
+});
+
+
+test("User incident: opening account tab cannot show ON when background is OFF", async () => {
+  const h=harness();
+  h.seenState.truthBackgroundEnabled=false;
+  h.seenState.truthBackgroundLastStatus="HTTP_429";
+  h.seenState.truthBackgroundLastChecked=new Date(Date.now()-40*60*1000).toISOString();
+  h.seenState.truthRateLimitUntil=Date.now()-1000;
+  await h.send({kind:"health",status:"HTTP_200"});
+  assert.equal(h.badges.at(-1),"TAB");
+  const status=await h.popup("background_status");
+  assert.equal(status.enabled,false);
+  assert.equal(status.status,"HTTP_429");
+  assert.equal(status.tab_status,"HTTP_200");
+  assert.ok(status.tab_checked);
+  assert.equal(h.badges.at(-1),"TAB");
+});
+
+test("Background remains ON despite stale tab health messages", async () => {
+  const h=harness();
+  h.setFetch(async () => ({
+    ok:true,status:200,headers:{get() {return null;}},
+    async text() {return JSON.stringify([original]);}
+  }));
+  assert.equal((await h.popup("background_test")).enabled,true);
+  await h.send({kind:"health",status:"HTTP_200"});
+  assert.equal(h.badges.at(-1),"ON");
+  const status=await h.popup("background_status");
+  assert.equal(status.enabled,true);
+  assert.equal(status.tab_status,"HTTP_200");
+  assert.equal(h.badges.at(-1),"ON");
+});
+
+test("A tab HTTP 200 never masks a continuing HTTP 429 cooldown", async () => {
+  const h=harness();
+  await h.send({kind:"health",status:"HTTP_429"});
+  assert.equal(h.badges.at(-1),"429");
+  await h.send({kind:"health",status:"HTTP_200"});
+  assert.equal(h.badges.at(-1),"429");
+  const info=await h.popup("background_status");
+  assert.equal(info.enabled,false);
+  assert.ok(info.cooldown_until > Date.now());
+  assert.equal(info.tab_status,"HTTP_200");
+});
+
+test("No background and no recent tab result is OFF", async () => {
+  const h=harness();
+  h.seenState.truthTabLastStatus="HTTP_200";
+  h.seenState.truthTabLastChecked=new Date(Date.now()-5*60*1000).toISOString();
+  const status=await h.popup("background_status");
+  assert.equal(status.enabled,false);
+  assert.equal(h.badges.at(-1),"OFF");
 });
