@@ -37,13 +37,13 @@ class StateTests(unittest.TestCase):
                     published=90.0,
                     at=100.0,
                 )
-                self.assertFalse(store.seen_item(item_id))
+                self.assertFalse(store.seen_item(f"trading economics|{item_id}"))
             finally:
                 store.close()
 
             reopened = StateStore(path)
             try:
-                self.assertTrue(reopened.seen_item(item_id))
+                self.assertTrue(reopened.seen_item(f"trading economics|{item_id}"))
             finally:
                 reopened.close()
 
