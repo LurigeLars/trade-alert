@@ -104,7 +104,10 @@ async function handle(msg, sender) {
   if (!msg || typeof msg !== "object") return {status: "IGNORED"};
   if (sender.id === chrome.runtime.id &&
       sender.url === chrome.runtime.getURL("popup.html")) {
-    if (msg.kind === "background_status") return backgroundStatus();
+    if (msg.kind === "background_status") {
+      await refreshBadge(); // Repair stale badge when popup is opened.
+      return backgroundStatus();
+    }
     if (msg.kind === "background_test") return runBackgroundFetch({enableOnSuccess: true});
     if (msg.kind === "background_off") return setBackgroundEnabled(false);
     if (msg.kind === "open_tab") {
