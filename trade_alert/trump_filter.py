@@ -86,6 +86,49 @@ ENERGY = _words(
     "oil", "crude", "brent", "wti", "opec", "gasoline", "diesel", "energy",
     "refinery", "refineries", "lng", "natural gas", "pipeline",
 )
+# "Carrier" / "carriers" are ambiguous (aircraft carriers, telecom,
+# shipping and insurance). Match naval references, not the bare words.
+CARRIER_TERMS = _words("carrier", "carriers")
+CARRIER_MILITARY_CONTEXT = _words(
+    "aircraft", "navy", "naval", "fleet", "warship", "warships",
+    "fighter jets", "fighter aircraft", "task force", "battle group",
+    "strike group", "carrier group", "carrier groups", "warplanes",
+    "military", "pentagon", "supercarrier", "supercarriers",
+)
+CARRIER_COMMERCIAL_CONTEXT = _words(
+    "mobile", "cellular", "wireless", "phone", "telecom", "insurance",
+    "health insurance", "shipping", "container", "containers", "cargo",
+    "freight", "parcel", "packages", "postal", "airline", "5g",
+)
+CARRIER_MOVEMENT = _words(
+    "deploy", "deploys", "deployed", "deploying", "deployment",
+    "sail", "sails", "sailed", "sailing", "move", "moves", "moved",
+    "moving", "head", "heads", "headed", "heading", "approach",
+    "approaches", "approached", "approaching", "dispatch", "dispatched",
+    "dispatching", "reposition", "repositioned", "repositioning",
+    "send", "sends", "sending", "sent", "arrive", "arrived", "arriving",
+    "enter", "enters", "entered", "entering", "stationed", "stationing",
+)
+CARRIER_LOCATION = _words(
+    "iran", "tehran", "hormuz", "venezuela", "caracas", "cuba", "havana",
+    "taiwan", "china", "red sea", "persian gulf", "caribbean",
+    "middle east",
+)
+
+
+def _military_carrier_reference(text: str) -> bool:
+    """Require naval context, or deployment in a geopolitical location."""
+    for match in CARRIER_TERMS.finditer(text):
+        nearby = text[max(0, match.start() - 100):match.end() + 100]
+        if CARRIER_COMMERCIAL_CONTEXT.search(nearby):
+            continue
+        if CARRIER_MILITARY_CONTEXT.search(nearby):
+            return True
+        if CARRIER_LOCATION.search(nearby) and CARRIER_MOVEMENT.search(nearby):
+            return True
+    return False
+
+
 # Concrete statements and changes, not generic "deal" / "great" / "bad".
 POLICY_ACTION = re.compile(
     r"\b(?:impos(?:e|es|ed|ing)|announc(?:e|es|ed|ing)|"
@@ -194,11 +237,19 @@ def classify_trump_statement(text: str) -> TrumpSignal:
     if FISCAL.search(excerpt):
         candidates.append((7 if (FISCAL_CRISIS.search(excerpt) or
                                   POLICY_ACTION.search(excerpt)) else 2, "FISCAL"))
-    if DEFENSE.search(excerpt):
+    carrier_military = _military_carrier_reference(excerpt)
+    if DEFENSE.search(excerpt) or carrier_military:
+        # "Carrier strike group" is a naval formation, not an actual
+        # military strike. Don't upgrade it to HIGH on that noun alone.
+        defense_action_text = re.sub(
+            r"\bcarrier\s+strike\s+groups?\b",
+            "carrier group", excerpt, flags=re.IGNORECASE,
+        )
         military_action = bool(
-            DEFENSE_ACTION.search(excerpt)
+            DEFENSE_ACTION.search(defense_action_text)
             or BOMB_INTENT.search(excerpt)
             or BOMBING_VERB.search(excerpt)
+            or (carrier_military and CARRIER_MOVEMENT.search(excerpt))
         )
         candidates.append((7 if military_action else 2, "DEFENSE"))
 
@@ -209,7 +260,7 @@ def classify_trump_statement(text: str) -> TrumpSignal:
         "RATES" if RATES.search(excerpt) else
         "TRADE" if TRADE.search(excerpt) else
         "FISCAL" if FISCAL.search(excerpt) else
-        "DEFENSE" if DEFENSE.search(excerpt) else
+        "DEFENSE" if DEFENSE.search(excerpt) or carrier_military else
         "TECH" if TECH.search(excerpt) else "GEOPOLITICS"
     )
     candidates.append((legacy, legacy_category))
