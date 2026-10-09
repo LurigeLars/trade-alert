@@ -111,6 +111,32 @@ Cloudflare access controls. A separate automated Chromium was previously
 observed to receive an HTTP 403; Chrome's background worker may likewise be
 refused. A real user-machine test is mandatory.
 
+## Single source poller and HTTP 429 cooldown
+
+When the Chrome background monitor is enabled, the normal account tab's
+content script asks the extension for permission before **every** API read.
+The background alarm is the only active extension poller. If background
+monitoring is disabled, the account-tab reader can act as the backup.
+
+If **either** reader receives HTTP 429, both readers pause new extension API
+requests for at least 30 minutes. A larger server-specified `Retry-After`
+is respected, capped at 24 hours. The background alarm is stopped; the
+popup shows the exact **HTTP_429** response and the earliest time for a
+manual reactivation attempt. **429** is displayed as `429`, not as `403`.
+The user must manually select **Activate Trump Monitor** after the cooldown
+expires; the extension does not continuously retry a denied endpoint.
+
+HTTP 401/403 still disable background mode without proxy rotation,
+session replay or access-control bypass. Opening the Truth Social website
+may itself issue requests outside the extension's control; avoiding double
+extension polling does not guarantee that the site never rate-limits.
+
+The tab's permission handshake never shares cookies, authorization
+headers or the extension's local state with the page, only a boolean
+permitting or denying a tab read. If service-worker communication fails,
+the tab does **not** fetch: it tries the lightweight permission check again
+at its next interval. The existing third-party RSS fallback is independent.
+
 ## Security and reliability limits
 
 - The extension can read the fixed public JSON endpoint only from its listed
