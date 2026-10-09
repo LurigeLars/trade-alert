@@ -59,6 +59,32 @@ function verified(post) {
     Number.isFinite(Date.parse(post.created_at));
 }
 
+function safePublicImageUrl(value) {
+  if (typeof value !== "string" || value.length > 1500) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" ||
+        !/^static-assets-[1-9]\.truthsocial\.com$/i.test(parsed.hostname) ||
+        (parsed.port && parsed.port !== "443") ||
+        parsed.username || parsed.password || parsed.hash ||
+        !parsed.pathname.startsWith("/")) return null;
+    return parsed.href;
+  } catch {return null;}
+}
+
+function sanitizedMedia(items) {
+  if (!Array.isArray(items)) return [];
+  return items.slice(0, 2).map(media => {
+    if (media?.type !== "image") return {type: String(media?.type || "").slice(0, 20)};
+    return {
+      type: "image",
+      ...(safePublicImageUrl(media.url) ? {url: safePublicImageUrl(media.url)} : {}),
+      ...(safePublicImageUrl(media.preview_url)
+        ? {preview_url: safePublicImageUrl(media.preview_url)} : {})
+    };
+  });
+}
+
 function validSender(sender) {
   try {
     const url = new URL(sender.url);
