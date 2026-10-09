@@ -26,6 +26,7 @@ class Config:
     poll_seconds: int = 20
     official_poll_seconds: int = 30
     dtv_max_headlines: int = 200
+    dtv_replay_overlap_seconds: int = 3600
     official_max_headlines: int = 25
     notification_min_score: int = 2
     startup_fresh_seconds: int = 120
@@ -65,6 +66,9 @@ class Config:
         if "official_max_headlines" not in raw:
             raw["official_max_headlines"] = min(int(legacy_max or 25), 100)
             migrated = True
+        if "dtv_replay_overlap_seconds" not in raw:
+            raw["dtv_replay_overlap_seconds"] = 3600
+            migrated = True
         if "official_symbols" in raw:
             symbols = tuple(raw["official_symbols"])
             if raw.get("profile_name") == "Oil / Brent" and symbols == ("ICEEUR:BRN1!",):
@@ -90,6 +94,8 @@ class Config:
             raise ValueError("official_poll_seconds must be between 5 and 3600")
         if not 1 <= int(self.dtv_max_headlines) <= 200:
             raise ValueError("dtv_max_headlines must be between 1 and 200")
+        if not 0 <= int(self.dtv_replay_overlap_seconds) <= 7200:
+            raise ValueError("dtv_replay_overlap_seconds must be between 0 and 7200")
         if not 1 <= int(self.official_max_headlines) <= 100:
             raise ValueError("official_max_headlines must be between 1 and 100")
         if not 0 <= int(self.notification_min_score) <= 10:

@@ -57,6 +57,7 @@ class TrayTests(unittest.TestCase):
         self.assertIn("auto-upptäcker", summary)
         self.assertIn("var 20 s", summary)
         self.assertIn("max 200 headlines", summary)
+        self.assertIn("replay-overlap: 3600 s", summary)
         self.assertIn("var 30 s", summary)
         self.assertIn("targeted corroboration", summary)
         self.assertIn("routing evidence", summary)
