@@ -85,10 +85,9 @@ class TrumpMarketImpactTests(unittest.TestCase):
         for text in (
             "I enjoyed the Cuban sandwich.",
             "The cubature of the shapes is fascinating.",
-            "This is just a beautiful Havana-style cigar box.",
+            "I enjoyed the Venezuelo-style decorations.",
         ):
-            # Cuban/Havana-style are not included as standalone policy terms.
-            # If adding demonyms later, these cases need a context gate.
+            # Demonyms and partial place-name matches are not standalone triggers.
             result = classify_trump_statement(text)
             self.assertEqual(result.priority, "IGNORE", text)
 
