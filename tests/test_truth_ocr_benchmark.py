@@ -1,7 +1,10 @@
 """No-network benchmark regressions for the public-image OCR sample."""
 import unittest
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.benchmark_truth_ocr import benchmark
 
 URL1 = "https://static-assets-1.truthsocial.com/test/a.png"
