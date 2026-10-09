@@ -256,8 +256,14 @@ def classify_trump_statement(text: str) -> TrumpSignal:
     if FISCAL.search(excerpt):
         candidates.append((7 if (FISCAL_CRISIS.search(excerpt) or
                                   POLICY_ACTION.search(excerpt)) else 2, "FISCAL"))
-    carrier_military = _military_carrier_reference(excerpt)
-    if DEFENSE.search(excerpt) or carrier_military:
+    # The OCR corpus contained a figurative "army of lions" on a civil
+    # aviation screenshot. Treat that idiom as figurative, not armed forces.
+    defense_excerpt = re.sub(
+        r"\barmy of (?:lions|fans|supporters|volunteers|followers)\b",
+        "", excerpt, flags=re.IGNORECASE,
+    )
+    carrier_military = _military_carrier_reference(defense_excerpt)
+    if DEFENSE.search(defense_excerpt) or carrier_military:
         # "Carrier strike group" is a naval formation, not an actual
         # military strike. Don't upgrade it to HIGH on that noun alone.
         defense_action_text = re.sub(
