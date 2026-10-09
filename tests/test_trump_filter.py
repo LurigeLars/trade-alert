@@ -197,6 +197,51 @@ class TrumpMarketImpactTests(unittest.TestCase):
                 self.assertEqual(result.priority, "IGNORE")
                 self.assertLess(result.score, 2)
 
+    def test_truth_image_ocr_calibration_false_high_and_false_energy(self):
+        # Real public-image OCR failure classes (representative short excerpts).
+        # These are not confirmed political or market claims.
+        cases = (
+            ("At the end of this video an Israeli plumber is praised. "
+             "In a meeting with the heroes of the Dubai flight. An army of lions!",
+             "IGNORE", "OTHER"),
+            ("These Americans have DESTROYED Iran's Navy and Air Force, "
+             "their air defense systems and historic operations.",
+             "STANDARD", "GEOPOLITICS"),
+            ("Election 2026 loyalists cheer Trump at GOP campaign rally. "
+             "Oklahomans' energy and enthusiasm were on display.",
+             "IGNORE", "OTHER"),
+            ("The end of the video shows our Navy personnel.",
+             "STANDARD", "DEFENSE"),
+            ("Air defense systems are ready.",
+             "STANDARD", "DEFENSE"),
+            ("We will end the war immediately.",
+             "HIGH", "DEFENSE"),
+            ("We are deploying our Air Force to Venezuela.",
+             "HIGH", "DEFENSE"),
+            ("I love our energy industry.",
+             "STANDARD", "ENERGY"),
+            ("U.S. natural gas production hits a record high.",
+             "STANDARD", "ENERGY"),
+            ("DAYS WITH CRUDE OIL ABOVE $100",
+             "STANDARD", "ENERGY"),
+        )
+        for statement, priority, category in cases:
+            with self.subTest(statement=statement):
+                result = classify_trump_statement(statement)
+                self.assertEqual((result.priority, result.category),
+                                 (priority, category), statement)
+
+    def test_iranian_unrest_mention_not_irrelevant_iranian_people(self):
+        unrest = classify_trump_statement(
+            "Thousands of Iranians are on the streets preparing to take "
+            "back their country from the regime."
+        )
+        self.assertEqual((unrest.priority, unrest.category),
+                         ("STANDARD", "GEOPOLITICS"))
+        for benign in ("I bought an Iranian rug.", "I met Iranian artists."):
+            with self.subTest(benign=benign):
+                self.assertEqual(classify_trump_statement(benign).priority, "IGNORE")
+
     def test_word_boundaries_and_non_oil_generic_feed_stay_unchanged(self):
         self.assertEqual(classify_trump_statement("Unions are proud of their stewardship.").score, 0)
         self.assertEqual(classify_trump_statement("I went to Chipotle.").score, 0)
