@@ -131,16 +131,25 @@ async function handle(msg, sender) {
   }
   if (msg.kind === "health") {
     const status = String(msg.status || "").slice(0, 20);
-    const prefs = await chrome.storage.local.get(["truthBackgroundEnabled"]);
-    // A success from a visible page is NOT evidence the tab-free source works.
-    if (!prefs.truthBackgroundEnabled) {
-      if (status === "HTTP_429") {
-        await registerRateLimit();
-        await chrome.storage.local.set({
-          truthBackgroundLastStatus: "HTTP_429",
-          truthBackgroundLastChecked: new Date().toISOString()
-        });
-      }
+    // A rate limit applies to the account endpoint regardless of whether it
+    // was the tab or background worker that observed it.
+    if (status === "HTTP_429") {
+      await registerRateLimit();
+      await setBackgroundEnabled(false);
+      await chrome.storage.local.set({
+        truthBackgroundLastStatus: "HTTP_429",
+        truthBackgroundLastChecked: new Date().toISOString()
+      });
+      await paintBackground("HTTP_429");
+      return {status};
+    }
+    const prefs = await chrome.storage.local.get([
+      "truthBackgroundEnabled", "truthRateLimitUntil"
+    ]);
+    // Neither a stale tab's success nor a fresh attempt during the cooldown
+    // should relabel an actual rate-limit condition as healthy.
+    if (!prefs.truthBackgroundEnabled &&
+        Date.now() >= Number(prefs.truthRateLimitUntil || 0)) {
       await health(status);
     }
     return {status};
