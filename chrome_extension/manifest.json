@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Trade Alert - Trump Monitor",
-  "version": "0.2.1",
-  "description": "Monitors public account posts through Chrome in the background and forwards relevant items locally to Trade Alert.",
+  "version": "0.3.0",
+  "description": "Monitors verified public Trump posts and transfers them silently to the local Trade Alert Windows app.",
   "permissions": [
-    "downloads",
     "storage",
     "alarms"
   ],
   "host_permissions": [
-    "https://truthsocial.com/*"
+    "https://truthsocial.com/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.js"
