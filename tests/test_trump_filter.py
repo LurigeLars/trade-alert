@@ -131,6 +131,45 @@ class TrumpMarketImpactTests(unittest.TestCase):
             with self.subTest(statement=statement):
                 self.check(statement, "DEFENSE", "HIGH", 6)
 
+    def test_aircraft_carrier_and_carriers_context_standard(self):
+        statements = (
+            "Our aircraft carrier is ready.",
+            "The aircraft carriers have a proud history.",
+            "The Navy's carriers are impressive.",
+            "The carrier strike group is impressive.",
+            "A carrier group is visiting a naval port.",
+        )
+        for statement in statements:
+            with self.subTest(statement=statement):
+                self.check(statement, "DEFENSE", "STANDARD", 2)
+
+    def test_carrier_deployment_and_geopolitical_movement_high(self):
+        statements = (
+            "The Navy carrier is deployed to the Caribbean.",
+            "We are sending aircraft carriers toward Venezuela.",
+            "Our carriers are heading to Cuba.",
+            "A carrier strike group is sailing toward Iran.",
+            "The naval carriers have arrived near Havana.",
+            "We are repositioning the carrier group in the Persian Gulf.",
+        )
+        for statement in statements:
+            with self.subTest(statement=statement):
+                self.check(statement, "DEFENSE", "HIGH", 6)
+
+    def test_commercial_carrier_words_are_not_military_signals(self):
+        statements = (
+            "Mobile carriers are offering better cell plans.",
+            "Health insurance carriers reported quarterly results.",
+            "Container carriers and freight shippers are increasing capacity.",
+            "The shipping carrier delivered my package.",
+            "Airline carriers have improved their luggage policies.",
+            "Carrier pigeons are quite clever.",
+        )
+        for statement in statements:
+            with self.subTest(statement=statement):
+                result = classify_trump_statement(statement)
+                self.assertEqual(result.priority, "IGNORE", statement)
+
     def test_military_partial_word_false_positives_are_ignored(self):
         statements = (
             "This was a bombshell interview.",
