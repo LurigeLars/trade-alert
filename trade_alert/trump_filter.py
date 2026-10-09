@@ -30,7 +30,7 @@ class TrumpSignal:
 # inflections deliberately instead of matching inside unrelated words.
 LEGACY_POLICY = re.compile(
     r"\b(?:iran|hormuz|venezuela|caracas|cuba|havana|russia|ukraine|israel|china|taiwan|"
-    r"tariffs?|sanctions?|embargo|blockade|oil|gasoline|crude|energy|"
+    r"tariffs?|sanctions?|embargo|blockade|oil|gasoline|crude|"
     r"nuclear|federal reserve|interest rates?|attack|strikes?|"
     r"war|military|opec|trade deal|ceasefire)\b", re.IGNORECASE
 )
@@ -54,6 +54,7 @@ FISCAL = _words(
 )
 DEFENSE = _words(
     "nato", "pentagon", "missile", "missiles", "airstrike", "airstrikes",
+    "air defense", "air defence", "defense systems", "defence systems",
     "troops", "troop", "invasion", "military", "nuclear weapon",
     "nuclear weapons", "defense spending", "defence spending",
     # Armed services, formations and equipment. Names alone are STANDARD.
@@ -82,9 +83,25 @@ GEO = _words(
     "taiwan", "venezuela", "caracas", "cuba", "havana", "north korea", "middle east",
     "china", "ceasefire", "blockade", "nuclear",
 )
+# Demonyms alone are often incidental. Pair an Iran reference with unrest
+# language; a social-media screenshot is relevance evidence, not confirmation.
+IRAN_UNREST = re.compile(
+    r"\biranian(?:s)?\b.{0,120}\b(?:protest(?:s|ers|ing)?|unrest|"
+    r"on the streets|take back their country|uprising)\b|"
+    r"\b(?:protest(?:s|ers|ing)?|unrest|uprising)\b.{0,120}\biranian(?:s)?\b",
+    re.IGNORECASE,
+)
 ENERGY = _words(
-    "oil", "crude", "brent", "wti", "opec", "gasoline", "diesel", "energy",
+    "oil", "crude", "brent", "wti", "opec", "gasoline", "diesel",
     "refinery", "refineries", "lng", "natural gas", "pipeline",
+)
+# Require a sector meaning for the ambiguous bare word 'energy'.
+ENERGY_CONTEXT = _words(
+    "energy industry", "energy sector", "energy policy", "energy prices",
+    "energy price", "energy supply", "energy security", "energy crisis",
+    "energy production", "energy exports", "energy imports",
+    "energy infrastructure", "energy companies", "energy markets",
+    "energy investment", "energy transition", "energy costs",
 )
 # "Carrier" / "carriers" are ambiguous (aircraft carriers, telecom,
 # shipping and insurance). Match naval references, not the bare words.
@@ -177,13 +194,15 @@ DEFENSE_ACTION = re.compile(
     r"\b(?:withdraw(?:s|al|n)?|leav(?:e|ing)|exit|"
     r"deploy(?:s|ed|ing|ment)?|attack(?:s|ed|ing)?|"
     r"strike(?:s)?|striking|invad(?:e|es|ed|ing)|invasion|"
-    r"defen(?:d|se)|mobiliz(?:e|es|ed|ing)|"
-    r"cut(?:s|ting)?|raise|increase|end|halt|ceasefire|"
+    r"defend(?:s|ed|ing)?|mobiliz(?:e|es|ed|ing)|"
+    r"cut(?:s|ting)?|raise|increase|halt|ceasefire|"
     r"launch(?:es|ed|ing)?|blockade|"
     r"bomb(?:ed|ing)|bombard(?:s|ed|ing|ment)?|"
     r"air\s?strikes?|air\s?raids?|"
     r"dispatch(?:es|ed|ing)?|mobilis(?:e|es|ed|ing)|"
     r"declar(?:e|es|ed|ing)\s+war|"
+    r"end(?:s|ed|ing)?\s+(?:the\s+)?(?:war|hostilities|blockade|"
+    r"military operations?)|"
     r"enter(?:s|ed|ing)?\s+(?:a\s+)?war|"
     r"war\s+(?:begins|began|has\s+begun))\b",
     re.IGNORECASE,
@@ -218,9 +237,10 @@ def classify_trump_statement(text: str) -> TrumpSignal:
         legacy = max(legacy, 4)
 
     candidates: list[tuple[int, str]] = []
-    if ENERGY.search(excerpt):
+    energy_context = bool(ENERGY.search(excerpt) or ENERGY_CONTEXT.search(excerpt))
+    if energy_context:
         candidates.append((max(4, legacy), "ENERGY"))
-    if GEO.search(excerpt):
+    if GEO.search(excerpt) or IRAN_UNREST.search(excerpt):
         geo_score = 6 if (POLICY_ACTION.search(excerpt)
                           and _words("attack", "attacks", "attacking",
                                      "strike", "strikes", "military", "blockade",
@@ -237,8 +257,14 @@ def classify_trump_statement(text: str) -> TrumpSignal:
     if FISCAL.search(excerpt):
         candidates.append((7 if (FISCAL_CRISIS.search(excerpt) or
                                   POLICY_ACTION.search(excerpt)) else 2, "FISCAL"))
-    carrier_military = _military_carrier_reference(excerpt)
-    if DEFENSE.search(excerpt) or carrier_military:
+    # The OCR corpus contained a figurative "army of lions" on a civil
+    # aviation screenshot. Treat that idiom as figurative, not armed forces.
+    defense_excerpt = re.sub(
+        r"\barmy of (?:lions|fans|supporters|volunteers|followers)\b",
+        "", excerpt, flags=re.IGNORECASE,
+    )
+    carrier_military = _military_carrier_reference(defense_excerpt)
+    if DEFENSE.search(defense_excerpt) or carrier_military:
         # "Carrier strike group" is a naval formation, not an actual
         # military strike. Don't upgrade it to HIGH on that noun alone.
         defense_action_text = re.sub(
@@ -256,7 +282,7 @@ def classify_trump_statement(text: str) -> TrumpSignal:
     # Avoid category inflation from overlapping keywords; HIGH requires a
     # concrete impact-bearing context in one category, not unrelated nouns.
     legacy_category = (
-        "ENERGY" if ENERGY.search(excerpt) else
+        "ENERGY" if energy_context else
         "RATES" if RATES.search(excerpt) else
         "TRADE" if TRADE.search(excerpt) else
         "FISCAL" if FISCAL.search(excerpt) else

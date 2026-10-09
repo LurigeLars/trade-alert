@@ -41,6 +41,29 @@ Ordinary proper-name mentions such as "met Powell" or "met NATO leaders"
 are STANDARD, not HIGH. Generic social posts without a market term and
 phrases such as "potato chips" are IGNORE.
 
+## Calibration from 50 real public-image OCR outputs (2026-10-09)
+
+The non-alerting benchmark successfully processed 50 distinct image contents,
+but `OCR_OK` confirms process completion, **not text accuracy**. In this
+unlabelled set, 2 HIGH and 6 STANDARD classifications require substantive
+review before being treated as market alerts. Text-only inspection of the
+image outputs exposed three deterministic false-positive patterns:
+
+- The bare word `energy` in a campaign-rally article is not a commodity
+  signal. Bare `energy` now requires sector context (`energy industry`,
+  `energy prices`, etc.); explicit oil/gas terms remain covered.
+- The noun `defense` in `air defense systems`, and the verb/noun `end` in
+  `at the end of this video`, no longer count as a new military action.
+  Explicit attacks, deployments and ending a war retain their HIGH path.
+- Figurative `army of lions` no longer creates military relevance.
+  Iranian unrest language can reach STANDARD without exact standalone
+  `Iran`, but a demonym such as `Iranian artists` alone remains irrelevant.
+
+Some otherwise readable images discuss past events, hypothetical economic
+reports or repeated commentary. Neither OCR success nor these keyword rules
+establish that an image depicts a new event. Date/source validation and manual
+ground-truth image review remain necessary; no alert is proof of market impact.
+
 ## Public image text
 
 The Chrome public-account bridge and the verified direct public account
