@@ -17,6 +17,8 @@ layout misses market terms. An offline reproducible test runs
 `python -m trade_alert.media_ocr PATH_TO_IMAGE.png`, printing the OCR
 text and deterministic classification; it does not generate any alerts.
 
+**Historical OCR benchmark:** An unlabelled set of public Trump image URL references and a non-alerting, local 50-unique-image Tesseract diagnostic are available in [the real-image benchmark guide](docs/truth-ocr-benchmark.md). It does not measure accuracy until manually verified labels are added.
+
 **Public image OCR (optional):** Extension v0.5.0 forwards bounded,
 allowlisted image attachment metadata for on-device Tesseract text recognition.
 A chart or meme containing terms like `CRUDE OIL` can now trigger an

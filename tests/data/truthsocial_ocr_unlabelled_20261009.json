@@ -1,0 +1,537 @@
+{
+  "schema_version": 1,
+  "description": "Public original media URL references for an offline, non-alert OCR benchmark. Images are NOT stored in Git. This is an UNLABELLED corpus; classifications are not ground truth.",
+  "source": "Truth Social public realDonaldTrump account timeline",
+  "account_id": "107780257626128497",
+  "collected_at": "2026-10-09T12:14:44.241Z",
+  "items": [
+    {
+      "status_id": "117408281179466427",
+      "created_at": "2026-10-09T01:09:56.709Z",
+      "media_id": "117408280983834023",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/408/280/983/834/023/original/ec2f9c154a11c21e.jpg"
+    },
+    {
+      "status_id": "117403266875935747",
+      "created_at": "2026-10-08T03:54:44.509Z",
+      "media_id": "117403266691181434",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/403/266/691/181/434/original/5bebb9d9098be06b.jpg"
+    },
+    {
+      "status_id": "117399306894086851",
+      "created_at": "2026-10-07T11:07:39.982Z",
+      "media_id": "117398684608089540",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/398/684/608/089/540/original/d3837c4282cf254d.jpg"
+    },
+    {
+      "status_id": "117399306525636867",
+      "created_at": "2026-10-07T11:07:34.360Z",
+      "media_id": "117399306403484409",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/399/306/403/484/409/original/1058086858050614.png"
+    },
+    {
+      "status_id": "117399304671862654",
+      "created_at": "2026-10-07T11:07:06.074Z",
+      "media_id": "117399304555133939",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/399/304/555/133/939/original/50ead568d94b44fd.png"
+    },
+    {
+      "status_id": "117391697161966116",
+      "created_at": "2026-10-06T02:52:24.686Z",
+      "media_id": "117391696461640095",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/391/696/461/640/095/original/3968f2e6e98c6f20.jpg"
+    },
+    {
+      "status_id": "117391697161966116",
+      "created_at": "2026-10-06T02:52:24.686Z",
+      "media_id": "117391696467605404",
+      "media_index": 1,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/391/696/467/605/404/original/3c0016058917c0eb.jpg"
+    },
+    {
+      "status_id": "117390214220913462",
+      "created_at": "2026-10-05T20:35:16.800Z",
+      "media_id": "117390180873535559",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/390/180/873/535/559/original/0823c90afcf6cdb5.jpg"
+    },
+    {
+      "status_id": "117390214220913462",
+      "created_at": "2026-10-05T20:35:16.800Z",
+      "media_id": "117390183133936701",
+      "media_index": 1,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/390/183/133/936/701/original/daf7dd12035b8adb.jpg"
+    },
+    {
+      "status_id": "117389589417251241",
+      "created_at": "2026-10-05T17:56:23.053Z",
+      "media_id": "117389518174655721",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/389/518/174/655/721/original/16afd2067bab10a8.jpg"
+    },
+    {
+      "status_id": "117389589417251241",
+      "created_at": "2026-10-05T17:56:23.053Z",
+      "media_id": "117389518172208499",
+      "media_index": 1,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/389/518/172/208/499/original/cb3ee3066cbf2c4c.jpg"
+    },
+    {
+      "status_id": "117389589417251241",
+      "created_at": "2026-10-05T17:56:23.053Z",
+      "media_id": "117389518174482123",
+      "media_index": 2,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/389/518/174/482/123/original/849c8816c860d61d.jpg"
+    },
+    {
+      "status_id": "117384612085223868",
+      "created_at": "2026-10-04T20:50:34.993Z",
+      "media_id": "117384611970716831",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/384/611/970/716/831/original/fbe5d8c164328c6e.jpg"
+    },
+    {
+      "status_id": "117383979597248683",
+      "created_at": "2026-10-04T18:09:43.992Z",
+      "media_id": "117383979146755962",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/979/146/755/962/original/41fb2535b3721707.jpg"
+    },
+    {
+      "status_id": "117383902865685162",
+      "created_at": "2026-10-04T17:50:13.161Z",
+      "media_id": "117383902524660787",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/902/524/660/787/original/d0e37edd777b4d38.jpg"
+    },
+    {
+      "status_id": "117383902145126256",
+      "created_at": "2026-10-04T17:50:02.166Z",
+      "media_id": "117383901784064567",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/901/784/064/567/original/c103dbec7486285e.jpg"
+    },
+    {
+      "status_id": "117383854962700677",
+      "created_at": "2026-10-04T17:38:02.219Z",
+      "media_id": "117383854703930876",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/854/703/930/876/original/fa54c2e6ff1f1561.jpg"
+    },
+    {
+      "status_id": "117383744306306629",
+      "created_at": "2026-10-04T17:09:53.737Z",
+      "media_id": "117383744059320139",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/744/059/320/139/original/16810724cc53bb0a.jpg"
+    },
+    {
+      "status_id": "117383743484621823",
+      "created_at": "2026-10-04T17:09:41.199Z",
+      "media_id": "117383742936224362",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/742/936/224/362/original/7703381e9705fadf.jpg"
+    },
+    {
+      "status_id": "117383742409715196",
+      "created_at": "2026-10-04T17:09:24.797Z",
+      "media_id": "117383742143539580",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/742/143/539/580/original/2c02ddea5139e6e8.jpg"
+    },
+    {
+      "status_id": "117383740615004316",
+      "created_at": "2026-10-04T17:08:57.413Z",
+      "media_id": "117383739526480563",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/739/526/480/563/original/4d2337cb4d932dab.jpg"
+    },
+    {
+      "status_id": "117383739007489519",
+      "created_at": "2026-10-04T17:08:32.883Z",
+      "media_id": "117383738754411664",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/738/754/411/664/original/267f09b629807a10.jpg"
+    },
+    {
+      "status_id": "117383737641173276",
+      "created_at": "2026-10-04T17:08:12.035Z",
+      "media_id": "117383737368808076",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/737/368/808/076/original/67280a4c54ce39dc.jpg"
+    },
+    {
+      "status_id": "117383736804723494",
+      "created_at": "2026-10-04T17:07:59.272Z",
+      "media_id": "117383736555144025",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/736/555/144/025/original/440179e9ade8e408.jpg"
+    },
+    {
+      "status_id": "117383734948790684",
+      "created_at": "2026-10-04T17:07:30.953Z",
+      "media_id": "117383734697210203",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/734/697/210/203/original/a7a6378b0aa669ec.jpg"
+    },
+    {
+      "status_id": "117383733622630931",
+      "created_at": "2026-10-04T17:07:10.717Z",
+      "media_id": "117383733326102176",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/733/326/102/176/original/6874fd7837fda86d.jpg"
+    },
+    {
+      "status_id": "117383732362183894",
+      "created_at": "2026-10-04T17:06:51.485Z",
+      "media_id": "117383732096962610",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/732/096/962/610/original/65e9cea3c5379b09.jpg"
+    },
+    {
+      "status_id": "117383728000348150",
+      "created_at": "2026-10-04T17:05:44.928Z",
+      "media_id": "117383727721111255",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/727/721/111/255/original/060968558815e11b.jpg"
+    },
+    {
+      "status_id": "117383727197989562",
+      "created_at": "2026-10-04T17:05:32.685Z",
+      "media_id": "117383726943656493",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/726/943/656/493/original/e85012638895f8fd.jpg"
+    },
+    {
+      "status_id": "117383726338052034",
+      "created_at": "2026-10-04T17:05:19.563Z",
+      "media_id": "117383726066770825",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/726/066/770/825/original/d6655d176686e7a3.jpg"
+    },
+    {
+      "status_id": "117383725569653665",
+      "created_at": "2026-10-04T17:05:07.838Z",
+      "media_id": "117383725264836245",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/725/264/836/245/original/023769a687f215af.jpg"
+    },
+    {
+      "status_id": "117383724226313929",
+      "created_at": "2026-10-04T17:04:47.340Z",
+      "media_id": "117383724049961669",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/724/049/961/669/original/f0d79b57168b18a8.jpg"
+    },
+    {
+      "status_id": "117383723154946782",
+      "created_at": "2026-10-04T17:04:30.992Z",
+      "media_id": "117383722950936940",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/722/950/936/940/original/91dd12d55abebf2f.jpg"
+    },
+    {
+      "status_id": "117383721995142736",
+      "created_at": "2026-10-04T17:04:13.296Z",
+      "media_id": "117383721738182428",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/721/738/182/428/original/bafc2dbca6f8a908.jpg"
+    },
+    {
+      "status_id": "117383720639661747",
+      "created_at": "2026-10-04T17:03:52.613Z",
+      "media_id": "117383720414426312",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/720/414/426/312/original/f8b9b500171c1d7f.jpg"
+    },
+    {
+      "status_id": "117383719532678103",
+      "created_at": "2026-10-04T17:03:35.721Z",
+      "media_id": "117383719317964515",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/383/719/317/964/515/original/4d16d3fa1bad1203.jpg"
+    },
+    {
+      "status_id": "117382613951699157",
+      "created_at": "2026-10-04T12:22:25.896Z",
+      "media_id": "117382612502132371",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/382/612/502/132/371/original/dbac779f2cb2657a.png"
+    },
+    {
+      "status_id": "117382611360859686",
+      "created_at": "2026-10-04T12:21:46.362Z",
+      "media_id": "117382610993599802",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/382/610/993/599/802/original/02e52fd1552f6448.jpg"
+    },
+    {
+      "status_id": "117378226674711107",
+      "created_at": "2026-10-03T17:46:41.361Z",
+      "media_id": "117378226238110237",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/378/226/238/110/237/original/2dd507d149d4db59.jpg"
+    },
+    {
+      "status_id": "117378226674711107",
+      "created_at": "2026-10-03T17:46:41.361Z",
+      "media_id": "117378226238306721",
+      "media_index": 1,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/378/226/238/306/721/original/b2f583041da54992.jpg"
+    },
+    {
+      "status_id": "117377462448761419",
+      "created_at": "2026-10-03T14:32:20.200Z",
+      "media_id": "117377336885474197",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/377/336/885/474/197/original/d1d95617b05e62af.jpg"
+    },
+    {
+      "status_id": "117377462448761419",
+      "created_at": "2026-10-03T14:32:20.200Z",
+      "media_id": "117377336869361440",
+      "media_index": 1,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/377/336/869/361/440/original/f5912cf8e6287cca.jpg"
+    },
+    {
+      "status_id": "117376855501150171",
+      "created_at": "2026-10-03T11:57:58.914Z",
+      "media_id": "117376855375225632",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/376/855/375/225/632/original/611785f9cd3ae074.png"
+    },
+    {
+      "status_id": "117376711131261545",
+      "created_at": "2026-10-03T11:21:16.005Z",
+      "media_id": "117376710834831961",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/376/710/834/831/961/original/4931a5820d80fd4f.png"
+    },
+    {
+      "status_id": "117376709448414660",
+      "created_at": "2026-10-03T11:20:50.325Z",
+      "media_id": "117376709268463535",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/376/709/268/463/535/original/776bf1380e7bad5e.png"
+    },
+    {
+      "status_id": "117376706134428638",
+      "created_at": "2026-10-03T11:19:59.759Z",
+      "media_id": "117376705976256826",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/376/705/976/256/826/original/a512367dae9783fd.png"
+    },
+    {
+      "status_id": "117376700640782000",
+      "created_at": "2026-10-03T11:18:35.932Z",
+      "media_id": "117376700468388176",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/376/700/468/388/176/original/93b761681bd6da94.png"
+    },
+    {
+      "status_id": "117374767217423174",
+      "created_at": "2026-10-03T03:06:54.232Z",
+      "media_id": "117374766376244662",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/374/766/376/244/662/original/2043ec8a117f3912.jpg"
+    },
+    {
+      "status_id": "117374767217423174",
+      "created_at": "2026-10-03T03:06:54.232Z",
+      "media_id": "117374766376105280",
+      "media_index": 1,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/374/766/376/105/280/original/336b9b2ee74b745d.jpg"
+    },
+    {
+      "status_id": "117374723143795331",
+      "created_at": "2026-10-03T02:55:41.721Z",
+      "media_id": "117374720933865673",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/374/720/933/865/673/original/f1535cb1b106724d.jpg"
+    },
+    {
+      "status_id": "117374710858193847",
+      "created_at": "2026-10-03T02:52:34.259Z",
+      "media_id": "117374709756497520",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/374/709/756/497/520/original/e86264d74bc14361.jpg"
+    },
+    {
+      "status_id": "117374668986690985",
+      "created_at": "2026-10-03T02:41:55.350Z",
+      "media_id": "117374668560272726",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/374/668/560/272/726/original/00284fb4c2e88145.jpg"
+    },
+    {
+      "status_id": "117374608656541990",
+      "created_at": "2026-10-03T02:26:34.786Z",
+      "media_id": "117374608302234463",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/374/608/302/234/463/original/db3772f47ec1c4fe.png"
+    },
+    {
+      "status_id": "117374601736336522",
+      "created_at": "2026-10-03T02:24:49.191Z",
+      "media_id": "117374601528202125",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/374/601/528/202/125/original/b5571e2bbd65ec9e.png"
+    },
+    {
+      "status_id": "117373586079029403",
+      "created_at": "2026-10-02T22:06:31.491Z",
+      "media_id": "117373585213730316",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/373/585/213/730/316/original/48aa2c74268e587e.jpg"
+    },
+    {
+      "status_id": "117372767454121009",
+      "created_at": "2026-10-02T18:38:20.265Z",
+      "media_id": "117372767277589625",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/372/767/277/589/625/original/79649d0975e30fb7.png"
+    },
+    {
+      "status_id": "117367002060076063",
+      "created_at": "2026-10-01T18:12:07.332Z",
+      "media_id": "117367001791561898",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/367/001/791/561/898/original/b882f16bad05a867.jpg"
+    },
+    {
+      "status_id": "117366845448721312",
+      "created_at": "2026-10-01T17:32:17.634Z",
+      "media_id": "117366845326290013",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/366/845/326/290/013/original/4e04398859ae1e72.png"
+    },
+    {
+      "status_id": "117366233265033126",
+      "created_at": "2026-10-01T14:56:36.453Z",
+      "media_id": "117366233010633968",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/366/233/010/633/968/original/660ba8c7d192139b.jpg"
+    },
+    {
+      "status_id": "117366233265033126",
+      "created_at": "2026-10-01T14:56:36.453Z",
+      "media_id": "117366233010380244",
+      "media_index": 1,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/366/233/010/380/244/original/a6c7dbd4613b1c5e.jpg"
+    },
+    {
+      "status_id": "117363089683591337",
+      "created_at": "2026-10-01T01:37:09.206Z",
+      "media_id": "117363089561749158",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/363/089/561/749/158/original/f1fcaf8a3c6ecf76.png"
+    },
+    {
+      "status_id": "117357090030899348",
+      "created_at": "2026-09-30T00:11:21.773Z",
+      "media_id": "117357089273579505",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/357/089/273/579/505/original/5b36fe815a3a80bc.jpg"
+    },
+    {
+      "status_id": "117357090030899348",
+      "created_at": "2026-09-30T00:11:21.773Z",
+      "media_id": "117357089273579504",
+      "media_index": 1,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/357/089/273/579/504/original/ffa5a10b3c71fbc5.jpg"
+    },
+    {
+      "status_id": "117357090030899348",
+      "created_at": "2026-09-30T00:11:21.773Z",
+      "media_id": "117357089273461508",
+      "media_index": 2,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/357/089/273/461/508/original/993bc6741ac7f2a8.jpg"
+    },
+    {
+      "status_id": "117356435739432952",
+      "created_at": "2026-09-29T21:24:58.077Z",
+      "media_id": "117356434517531231",
+      "media_index": 0,
+      "scanner_eligible": true,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/356/434/517/531/231/original/f469ac2b8d8005a1.jpg"
+    },
+    {
+      "status_id": "117356435739432952",
+      "created_at": "2026-09-29T21:24:58.077Z",
+      "media_id": "117356434517836699",
+      "media_index": 1,
+      "scanner_eligible": false,
+      "url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/117/356/434/517/836/699/original/b209eb47b2729b10.jpg"
+    }
+  ]
+}
