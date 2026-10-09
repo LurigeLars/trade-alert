@@ -101,11 +101,12 @@ def poll_browser_feed(
             caption = post.text[:450] if post.text else "[Ingen inläggstext]"
             image_evidence = ("\n[Bildtext via lokal OCR] " + image_text[:650]) if image_text else ""
             body = (f"Trump · {signal.priority} / {signal.category} · Chrome-källa\n"
+                    f"Evidens: {evidence.event_kind} · EJ KONTROLLERAD\n"
                     f"{caption}{image_evidence}\n"
                     f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
                     f" · mottagen +{int(max(0, age))} sek\n"
-                    f"Evidens: {evidence.event_kind} · {evidence.reason}\n"
-                    "Oberoende bekräftelse: EJ KONTROLLERAD. Ingen automatisk handel.")
+                    f"Bedömning: {evidence.reason}\n"
+                    "Ingen automatisk handel.")
             stored = store.record_alert(
                 item_key=key, source="TRUTH_CHROME",
                 provider="Truth Social (local Chrome tab)",
