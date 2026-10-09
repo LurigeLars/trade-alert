@@ -64,7 +64,8 @@ class StateStore:
             """
             INSERT OR IGNORE INTO seen_items(dedupe_key, first_seen)
             SELECT
-                substr(s.item_key, length(a.source) + 2),
+                lower(trim(COALESCE(a.provider, ''))) || '|' ||
+                    substr(s.item_key, length(a.source) + 2),
                 s.first_seen
             FROM seen AS s
             JOIN alerts AS a ON a.item_key = s.item_key
