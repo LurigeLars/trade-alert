@@ -121,6 +121,8 @@ The tray menu exposes:
 
 Unread real alerts are stored in local SQLite. The tray icon keeps a persistent unread badge until the displayed alerts are marked read.
 
+For news-latency diagnostics, Trade Alert also persists the first time a provider item is observed in DTV News Flow. **Latest alerts** shows three independent timestamps when available: provider publication time, first DTV News Flow observation, and Trade Alert registration time. If an Official TradingView item never appears in News Flow with the same provider item ID, the DTV timestamp is shown as not observed rather than inferred. A matching `news-latency` line is also written to the local log when an alert is registered.
+
 The information windows support selection, `Ctrl+A`, `Ctrl+C`, **Copy all**, scrolling, system-aware light/dark mode, and Per-Monitor DPI Awareness V2 on Windows. News links in **Latest alerts** are rendered as clickable hyperlinks; TradingView-relative `/news/...` paths are resolved to `https://www.tradingview.com`, while non-HTTP(S) schemes are deliberately not made clickable.
 
 Trade Alert also sets a stable Windows AppUserModelID and reuses the current tray icon for its Tk information windows. This keeps the same Trade Alert identity/icon in the notification area, the window title bar and the Windows taskbar instead of falling back to the generic Python icon.
