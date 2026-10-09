@@ -88,7 +88,8 @@ def _handler(folder: Path):
             self.send_header("X-Content-Type-Options", "nosniff")
             origin = self._origin()
             if origin:
-                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Access-Control-Allow-Origin",
+                                 origin.replace("\r", "").replace("\n", ""))
                 self.send_header("Vary", "Origin")
             self.end_headers()
             self.wfile.write(payload)
@@ -98,7 +99,8 @@ def _handler(folder: Path):
                 self._reply(403, {"status": "DENIED"})
                 return
             self.send_response(204)
-            self.send_header("Access-Control-Allow-Origin", self._origin())
+            self.send_header("Access-Control-Allow-Origin",
+                             self._origin().replace("\r", "").replace("\n", ""))
             self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers",
                              "Content-Type, X-Trade-Alert-Bridge")
