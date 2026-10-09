@@ -105,6 +105,25 @@ class TrayTests(unittest.TestCase):
         self.assertIsNone(normalize_news_link("//example.test/story"))
         self.assertIsNone(normalize_news_link(""))
 
+    def test_legacy_dtv_alert_does_not_claim_later_observation_as_first_seen(self):
+        record = AlertRecord(
+            item_key="legacy",
+            created_at=120.0,
+            published=90.0,
+            dtv_first_seen=130.0,
+            source="DTV_NEWS_FLOW",
+            provider="Trading Economics",
+            headline="Oil Prices Ease on Trump remarks about Iran",
+            body="body",
+            score=5,
+            link=None,
+            unread=False,
+        )
+        text = format_alert_history([record], 0)
+        self.assertIn("DTV först sedd: ≤", text)
+        self.assertIn("exakt tid ej mätt", text)
+        self.assertNotIn("1970-01-01 01:02:10", text)
+
     def test_alert_history_keeps_full_headline_and_link(self):
         record = AlertRecord(
             item_key="a",
