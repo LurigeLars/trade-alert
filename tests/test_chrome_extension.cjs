@@ -204,3 +204,53 @@ test("Previously baselined tab data does not generate duplicate downloads", asyn
   await h.send({kind:"health",status:"HTTP_200"});
   assert.equal(h.badges.at(-1),"ON"); // tab success does not change background status
 });
+
+
+test("An active background monitor denies independent tab polling", async () => {
+  const h=harness();
+  h.setFetch(async () => ({
+    ok:true, status:200, headers:{get() {return null;}},
+    async text() {return JSON.stringify([original]);}
+  }));
+  const activated=await h.popup("background_test");
+  assert.equal(activated.status, "HTTP_200");
+  const during=await h.send({kind:"monitor_mode"});
+  assert.equal(during.tabAllowed, false);
+  await h.popup("background_off");
+  const fallback=await h.send({kind:"monitor_mode"});
+  assert.equal(fallback.tabAllowed, true);
+});
+
+test("HTTP 429 is labeled 429, turns background off and stops both pollers", async () => {
+  const h=harness();
+  let requests=0;
+  h.setFetch(async () => {
+    requests++;
+    return {
+      ok:false, status:429,
+      headers:{get(name) {return name==="retry-after" ? "60" : null;}}
+    };
+  });
+  const blocked=await h.popup("background_test");
+  assert.equal(blocked.status, "HTTP_429");
+  assert.equal(blocked.enabled, false);
+  assert.equal(h.badges.at(-1), "429");
+  assert.equal(h.alarms.size, 0);
+  assert.ok(blocked.cooldown_until > Date.now() + 29*60*1000);
+  assert.equal((await h.send({kind:"monitor_mode"})).tabAllowed,false);
+  const repeat=await h.popup("background_test");
+  assert.equal(repeat.status, "HTTP_429");
+  assert.equal(requests, 1); // no network retry while rate-limited
+  assert.equal((await h.popup("background_status")).status,"HTTP_429");
+});
+
+test("Tab-visible HTTP 429 also pauses future tab and background fetching", async () => {
+  const h=harness();
+  await h.send({kind:"health",status:"HTTP_429"});
+  assert.equal(h.badges.at(-1),"429");
+  const state=await h.popup("background_status");
+  assert.equal(state.status,"HTTP_429");
+  assert.equal(state.enabled,false);
+  assert.equal((await h.send({kind:"monitor_mode"})).tabAllowed,false);
+  assert.ok(state.cooldown_until > Date.now() + 29*60*1000);
+});
