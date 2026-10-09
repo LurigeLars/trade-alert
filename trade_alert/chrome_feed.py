@@ -71,7 +71,6 @@ def poll_browser_feed(
                 stats["stale"] += 1
                 continue
             image_text = ""
-            image_status = "NO_IMAGE"
             if image_url_from_post(row):
                 image_text, image_status = extract_image_text(row)
                 if image_status == "OCR_OK":
