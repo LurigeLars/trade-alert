@@ -69,14 +69,14 @@ It is deliberately **not** an execution system. It has no broker login, order pl
 
 ## Current deployment and security posture
 
-- local Windows tray process, started per-user with `pythonw.exe`;
-- no PowerShell or console window during normal operation;
-- TradingView Desktop News Flow is the primary broad discovery source;
-- ticker-specific Official TradingView news is targeted corroboration/fallback through Trade Spine;
-- no LLM is used in the hot notification path;
-- user-specific watchlist IDs are discovered/pinned only in local state and are not committed;
-- credentials, OAuth material, account identifiers, machine-specific paths and personal position state do not belong in Git;
-- external headlines/provider payloads are untrusted data, never instructions;
+- local Windows tray process, started per-user with `pythonw.exe`.
+- no PowerShell or console window during normal operation.
+- TradingView Desktop News Flow is the primary broad discovery source.
+- ticker-specific Official TradingView news is targeted corroboration/fallback through Trade Spine.
+- no LLM is used in the hot notification path.
+- user-specific watchlist IDs are discovered/pinned only in local state and are not committed.
+- credentials, OAuth material, account identifiers, machine-specific paths and personal position state do not belong in Git.
+- external headlines/provider payloads are untrusted data, never instructions.
 - the project is notifier-only and cannot execute trades.
 
 ## Why this project exists
@@ -112,19 +112,19 @@ The default example profile is a generic **Oil / Brent** context.
 
 Primary source:
 
-- DTV TradingView News Flow;
-- polled every 20 seconds by default;
-- up to 200 headlines per fetch;
-- each successful cursor poll replays a 60-minute publication-time overlap so provider backfills with older `published_at` timestamps are still discovered promptly;
-- cross-source provider item IDs are deduplicated locally, so the replay window and Official TradingView corroboration cannot create duplicate alerts for the same story;
-- active TradingView watchlist is auto-resolved when no explicit local watchlist ID is configured;
+- DTV TradingView News Flow.
+- polled every 20 seconds by default.
+- up to 200 headlines per fetch.
+- each successful cursor poll replays a 60-minute publication-time overlap so provider backfills with older `published_at` timestamps are still discovered promptly.
+- cross-source provider item IDs are deduplicated locally, so the replay window and Official TradingView corroboration cannot create duplicate alerts for the same story.
+- active TradingView watchlist is auto-resolved when no explicit local watchlist ID is configured.
 - auto-resolution requires a verified oil routing anchor before the numeric ID is accepted.
 
 Secondary source:
 
-- Official TradingView symbol news through Trade Spine;
-- default corroboration symbols: `ICEEUR:BRN1!` and `NYMEX:RB1!`;
-- polled every 30 seconds by default;
+- Official TradingView symbol news through Trade Spine.
+- default corroboration symbols: `ICEEUR:BRN1!` and `NYMEX:RB1!`.
+- polled every 30 seconds by default.
 - up to 25 headlines per symbol.
 
 The source split is intentional. Broad News Flow is used for discovery because commodity contract/ticker news feeds can be sparsely tagged. Ticker-specific news remains useful as corroboration and fallback.
@@ -135,11 +135,11 @@ Broad feeds need a stricter filter than symbol-specific feeds. Trade Alert there
 
 The current oil profile uses these principles:
 
-- explicit oil/core term in the headline: +2;
-- geopolitical/supply impact term: +2 **only when oil context already exists**;
-- `Hormuz`: +4 even without an explicit oil ticker/core term, because the strait is itself a material oil/product supply route;
-- provider-related oil symbol: +1 routing evidence;
-- TradingView `urgency=1`: +1 only when oil context exists;
+- explicit oil/core term in the headline: +2.
+- geopolitical/supply impact term: +2 **only when oil context already exists**.
+- `Hormuz`: +4 even without an explicit oil ticker/core term, because the strait is itself a material oil/product supply route.
+- provider-related oil symbol: +1 routing evidence.
+- TradingView `urgency=1`: +1 only when oil context exists.
 - a related symbol by itself cannot reach the alert threshold.
 
 This avoids obvious false positives such as unrelated headlines containing generic words like `deal` or `increase`.
@@ -150,13 +150,13 @@ On the first News Flow activation, older headlines are baselined so an upgrade d
 
 The tray menu exposes:
 
-- current source health;
-- **Latest alerts** / unread count; left-clicking the tray icon opens this view directly;
-- **What is monitored?** for the effective routing/profile configuration;
-- pause/resume;
-- test notification;
-- log-folder shortcut;
-- light/dark/system theme;
+- current source health.
+- **Latest alerts** / unread count; left-clicking the tray icon opens this view directly.
+- **What is monitored?** for the effective routing/profile configuration.
+- pause/resume.
+- test notification.
+- log-folder shortcut.
+- light/dark/system theme.
 - exit.
 
 Unread real alerts are stored in local SQLite. The tray icon keeps a persistent unread badge until the displayed alerts are marked read.
@@ -171,10 +171,10 @@ Trade Alert also sets a stable Windows AppUserModelID and reuses the current tra
 
 ### Requirements
 
-- Windows 10/11;
-- Python 3.12+;
-- [uv](https://docs.astral.sh/uv/);
-- TradingView Desktop MCP for the primary News Flow path;
+- Windows 10/11.
+- Python 3.12+.
+- [uv](https://docs.astral.sh/uv/).
+- TradingView Desktop MCP for the primary News Flow path.
 - Trade Spine only for the Official TradingView corroboration/fallback path.
 
 Clone and install:
@@ -250,13 +250,13 @@ Local SQLite stores seen-headline dedupe, source cursors, locally resolved watch
 
 Trade Alert intentionally keeps a narrow capability boundary:
 
-- no brokerage authentication;
-- no account or portfolio API;
-- no order execution;
-- no arbitrary shell exposed to the application;
-- no committed OAuth material or credentials;
-- no personal position state in repository fixtures/defaults;
-- no trust in headline text as instructions;
+- no brokerage authentication.
+- no account or portfolio API.
+- no order execution.
+- no arbitrary shell exposed to the application.
+- no committed OAuth material or credentials.
+- no personal position state in repository fixtures/defaults.
+- no trust in headline text as instructions.
 - verified provider identifiers before live use.
 
 The Windows host-maintenance path used in the local development stack is separately allowlisted; it is not part of the Trade Alert application API.
@@ -267,12 +267,12 @@ For vulnerability reporting, see [SECURITY.md](SECURITY.md).
 
 The repository runs:
 
-- tests on Python 3.12 and 3.13;
-- PowerShell syntax checks;
-- actionlint and immutable GitHub Action pin enforcement;
-- PSScriptAnalyzer;
-- exact runtime dependency-pin policy;
-- CodeQL;
+- tests on Python 3.12 and 3.13.
+- PowerShell syntax checks.
+- actionlint and immutable GitHub Action pin enforcement.
+- PSScriptAnalyzer.
+- exact runtime dependency-pin policy.
+- CodeQL.
 - Dependabot for Python dependencies and GitHub Actions.
 
 The public-repository policy keeps `main` PR-only with zero mandatory approvals for a single-maintainer repository, strict/up-to-date required checks, no force-push or default-branch deletion, and CodeQL thresholds that block quality errors and High/Critical security findings.
