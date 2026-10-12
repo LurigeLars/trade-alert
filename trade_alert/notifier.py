@@ -117,12 +117,14 @@ def alert_click(path: Path, item_key: str, on_read: Callable[[int], None] | None
         else:
             from .tray import _show_text_window, format_alert_history, make_window_icon
 
+            text, links = format_alert_history([alert], unread_count)
             _show_text_window(
                 'Trade Alert · Senaste alerts',
-                format_alert_history([alert], unread_count),
+                text,
                 Config.load().theme_mode,
                 make_window_icon(),
                 on_shown=mark_read,
+                links=links,
             )
         return True
     return click

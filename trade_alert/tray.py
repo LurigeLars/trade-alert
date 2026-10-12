@@ -144,32 +144,30 @@ def _local_timestamp(value: float | None) -> str:
     if value is None:
         return "okänd"
     try:
-        return datetime.fromtimestamp(value).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.fromtimestamp(value).astimezone().strftime("%H:%M %d/%m")
     except (OSError, OverflowError, ValueError):
         return "okänd"
 
 
-def format_alert_history(alerts: list[AlertRecord], unread_count: int) -> str:
+def format_alert_history(
+    alerts: list[AlertRecord], unread_count: int,
+) -> tuple[str, list[tuple[int, str, str]]]:
     if not alerts:
-        return "Inga riktiga Trade Alert-signaler har registrerats ännu."
+        return "Inga riktiga Trade Alert-signaler har registrerats ännu.", []
 
     lines = [f"Olästa före öppning: {unread_count}", "", f"Senaste {len(alerts)} alerts:"]
+    links = []
     for alert in alerts:
         published = _local_timestamp(alert.published)
         marker = "OLÄST" if alert.unread else "läst"
-        provider = alert.provider or alert.source
-        lines.extend(
-            [
-                "",
-                f"[{marker}] {provider} · relevans {alert.score}",
-                alert.headline,
-                f"Publicerad: {published}",
-                f"Källa: {alert.source}",
-            ]
-        )
-        if alert.link:
-            lines.append(f"Länk: {alert.link}")
-    return "\n".join(lines)
+        provider = " ".join((alert.provider or alert.source).split())
+        prefix = f"{provider} · "
+        headline = " ".join(alert.headline.split())
+        lines.extend(["", f"[{marker}] {published}", prefix + headline])
+        url = normalize_news_link(alert.link)
+        if url is not None and headline:
+            links.append((len(lines), prefix, url))
+    return "\n".join(lines), links
 
 
 def windows_apps_use_dark_mode() -> bool:
@@ -269,8 +267,9 @@ def _show_text_window(
     app_icon: Image.Image | None = None,
     *,
     show_all_label: str | None = None,
-    on_show_all: Callable[[], str] | None = None,
+    on_show_all: Callable[[], tuple[str, list[tuple[int, str, str]]]] | None = None,
     on_shown: Callable[[], None] | None = None,
+    links: list[tuple[int, str, str]] | None = None,
 ) -> None:
     """Open a selectable, copyable information window using the effective theme."""
     if os.name != "nt":
@@ -334,7 +333,7 @@ def _show_text_window(
 
         current_text = text
 
-        def render_text(content: str) -> None:
+        def render_text(content: str, content_links: list[tuple[int, str, str]] | None = None) -> None:
             nonlocal current_text
             current_text = content
             text_widget.configure(state="normal")
@@ -350,17 +349,12 @@ def _show_text_window(
                 if line.strip() in headings:
                     text_widget.tag_add("heading", f"{line_number}.0", f"{line_number}.end")
 
-            for link_number, line in enumerate(current_text.splitlines(), start=1):
-                if not line.startswith("Länk: "):
-                    continue
-                raw_link = line[len("Länk: "):].strip()
-                browser_url = normalize_news_link(raw_link)
-                if browser_url is None:
-                    continue
-
+            for link_number, (line_number, prefix, browser_url) in enumerate(content_links or []):
                 tag = f"hyperlink_{link_number}"
-                start = f"{link_number}.{len('Länk: ')}"
-                end = f"{link_number}.{len(line)}"
+                # Tcl counts supplementary Unicode characters differently from Python.
+                column = text_widget.tk.call("string", "length", prefix)
+                start = f"{line_number}.{column}"
+                end = f"{line_number}.end"
                 text_widget.tag_add(tag, start, end)
                 text_widget.tag_configure(
                     tag,
@@ -387,7 +381,7 @@ def _show_text_window(
             text_widget.configure(state="disabled")
             text_widget.yview_moveto(0.0)
 
-        render_text(text)
+        render_text(text, links)
 
         def select_all(_event=None):
             text_widget.tag_add("sel", "1.0", "end-1c")
@@ -435,7 +429,7 @@ def _show_text_window(
                 except Exception:
                     logging.exception("Could not expand Trade Alert history")
                     return
-                render_text(expanded_text)
+                render_text(*expanded_text)
                 if on_shown is not None:
                     on_shown()
                 show_all_button.destroy()
@@ -665,11 +659,11 @@ class TrayController:
             unread_before = store.unread_alert_count()
             alerts = store.recent_alerts(limit=MAX_ALERT_HISTORY)
             visible = alerts[:10]
-            text = format_alert_history(visible, unread_before)
+            text, links = format_alert_history(visible, unread_before)
         finally:
             store.close()
 
-        def show_all() -> str:
+        def show_all() -> tuple[str, list[tuple[int, str, str]]]:
             nonlocal visible
             visible = alerts
             return format_alert_history(alerts, unread_before)
@@ -691,6 +685,7 @@ class TrayController:
             show_all_label=f"Visa alla {len(alerts)}" if len(alerts) > 10 else None,
             on_show_all=show_all if len(alerts) > 10 else None,
             on_shown=shown,
+            links=links,
         )
 
     def _test_notification(self, _icon, _item) -> None:
