@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .config import Config, app_dir
-from .notifier import notify
+from .notifier import alert_click, notify
 from .state import StateStore
 
 SOURCE_ID = re.compile(r"^[A-Z][A-Z0-9_:-]{2,79}$")
@@ -114,7 +114,6 @@ def poll_breaking_inbox(
         return {"accepted": 0, "notified": 0, "rejected": 0, "stale": 0}
     directory.mkdir(parents=True, exist_ok=True)
     moment = time.time() if at is None else float(at)
-    notification = notification or notify
     stats = {"accepted": 0, "notified": 0, "rejected": 0, "stale": 0}
     for path in sorted(directory.glob("*.json"))[:MAX_BATCH_FILES]:
         try:
@@ -156,7 +155,11 @@ def poll_breaking_inbox(
                         alert_callback(store.unread_alert_count())
                     except Exception:
                         logging.exception("breaking alert callback failed")
-                if notification("Trade Alert · POLICY", body):
+                send = notification or (lambda title, text: notify(
+                    title, text, item_key=key,
+                    on_click=alert_click(store.path, key, alert_callback),
+                ))
+                if send("Trade Alert · POLICY", body):
                     stats["notified"] += 1
                 else:
                     logging.error("Breaking alert saved unread but Windows toast failed: %s", key)

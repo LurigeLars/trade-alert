@@ -9,13 +9,12 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 from typing import Awaitable, Callable, Literal
-from urllib.parse import urljoin, urlsplit
 
 import pystray
 from PIL import Image, ImageDraw
 
 from .config import Config, app_dir
-from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS, OIL_ROUTING_SYMBOLS
+from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS, OIL_ROUTING_SYMBOLS, normalize_news_link
 from .notifier import notify
 from .state import MAX_ALERT_HISTORY, AlertRecord, StateStore
 from .windows_ui import (
@@ -150,63 +149,21 @@ def _local_timestamp(value: float | None) -> str:
         return "okänd"
 
 
-def normalize_news_link(value: str) -> str | None:
-    """Return a browser-safe HTTP(S) URL for an alert link.
-
-    TradingView News Flow commonly returns a site-relative /news/... path.
-    Other schemes are deliberately rejected because provider payloads are
-    untrusted external data.
-    """
-    raw = value.strip()
-    if not raw:
-        return None
-
-    if raw.startswith("/") and not raw.startswith("//"):
-        candidate = urljoin("https://www.tradingview.com/", raw)
-    else:
-        candidate = raw
-
-    try:
-        parsed = urlsplit(candidate)
-    except ValueError:
-        return None
-
-    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
-        return None
-    return candidate
-
-
 def format_alert_history(alerts: list[AlertRecord], unread_count: int) -> str:
     if not alerts:
         return "Inga riktiga Trade Alert-signaler har registrerats ännu."
 
     lines = [f"Olästa före öppning: {unread_count}", "", f"Senaste {len(alerts)} alerts:"]
     for alert in alerts:
-        timestamp = _local_timestamp(alert.created_at)
         published = _local_timestamp(alert.published)
         marker = "OLÄST" if alert.unread else "läst"
         provider = alert.provider or alert.source
-        if alert.source == "DTV_NEWS_FLOW" and (
-            alert.dtv_first_seen is None
-            or alert.dtv_first_seen > alert.created_at
-        ):
-            dtv_seen = (
-                f"DTV först sedd: ≤ {timestamp} · exakt tid ej mätt "
-                "(alert före first-seen-telemetri)"
-            )
-        elif alert.dtv_first_seen is not None:
-            dtv_seen = f"DTV först sedd: {_local_timestamp(alert.dtv_first_seen)}"
-        else:
-            dtv_seen = "DTV först sedd: inte observerad med samma provider-ID"
-
         lines.extend(
             [
                 "",
-                f"[{marker}] registrerad {timestamp} · {provider} · relevans {alert.score}",
+                f"[{marker}] {provider} · relevans {alert.score}",
                 alert.headline,
                 f"Publicerad: {published}",
-                dtv_seen,
-                f"Alert registrerad: {timestamp}",
                 f"Källa: {alert.source}",
             ]
         )
@@ -313,6 +270,7 @@ def _show_text_window(
     *,
     show_all_label: str | None = None,
     on_show_all: Callable[[], str] | None = None,
+    on_shown: Callable[[], None] | None = None,
 ) -> None:
     """Open a selectable, copyable information window using the effective theme."""
     if os.name != "nt":
@@ -478,6 +436,8 @@ def _show_text_window(
                     logging.exception("Could not expand Trade Alert history")
                     return
                 render_text(expanded_text)
+                if on_shown is not None:
+                    on_shown()
                 show_all_button.destroy()
 
             show_all_button = new_button(show_all_label or "Visa alla", expand_history)
@@ -491,6 +451,15 @@ def _show_text_window(
         root.bind("<Escape>", lambda _event: root.destroy())
         text_widget.focus_set()
 
+        if on_shown is not None:
+            def shown(_event) -> None:
+                if _event.widget is root:
+                    root.unbind("<Map>")
+                    try:
+                        on_shown()
+                    except Exception:
+                        logging.exception("Could not acknowledge displayed alert")
+            root.bind("<Map>", shown)
         root.mainloop()
 
     thread = threading.Thread(target=run_window, name="TradeAlertInfoWindow", daemon=True)
@@ -697,22 +666,23 @@ class TrayController:
             alerts = store.recent_alerts(limit=MAX_ALERT_HISTORY)
             visible = alerts[:10]
             text = format_alert_history(visible, unread_before)
-            store.mark_alerts_read([alert.item_key for alert in visible])
-            self._unread_count = store.unread_alert_count()
         finally:
             store.close()
 
         def show_all() -> str:
-            expanded_store = StateStore()
-            try:
-                expanded_store.mark_alerts_read([alert.item_key for alert in alerts[10:]])
-                self._unread_count = expanded_store.unread_alert_count()
-            finally:
-                expanded_store.close()
-            self._refresh_tray()
+            nonlocal visible
+            visible = alerts
             return format_alert_history(alerts, unread_before)
 
-        self._refresh_tray()
+        def shown() -> None:
+            displayed_store = StateStore()
+            try:
+                displayed_store.mark_alerts_read([alert.item_key for alert in visible])
+                self._unread_count = displayed_store.unread_alert_count()
+            finally:
+                displayed_store.close()
+            self._refresh_tray()
+
         _show_text_window(
             "Trade Alert · Senaste alerts",
             text,
@@ -720,6 +690,7 @@ class TrayController:
             make_window_icon(),
             show_all_label=f"Visa alla {len(alerts)}" if len(alerts) > 10 else None,
             on_show_all=show_all if len(alerts) > 10 else None,
+            on_shown=shown,
         )
 
     def _test_notification(self, _icon, _item) -> None:

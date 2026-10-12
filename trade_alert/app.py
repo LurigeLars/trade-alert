@@ -23,7 +23,7 @@ from .news import (
     relevance_score,
     resolve_dtv_watchlist,
 )
-from .notifier import notify
+from .notifier import alert_click, notify
 from .state import StateStore
 from .windows_ui import configure_windows_app_identity, configure_windows_dpi_awareness
 
@@ -226,7 +226,10 @@ async def run_once(
                     alert_callback(store.unread_alert_count())
                 except Exception:
                     logging.exception("alert callback failed")
-            if notify(title, body):
+            if inserted and notify(
+                title, body, item_key=item.key,
+                on_click=alert_click(store.path, item.key, alert_callback),
+            ):
                 notified += 1
         store.mark_seen(item.key, at=now)
         store.mark_seen_item(item.dedupe_key, at=now)
