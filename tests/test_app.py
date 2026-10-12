@@ -33,7 +33,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
                 with patch(
                     "trade_alert.app._collect",
                     new=AsyncMock(return_value=([item], False, True, False)),
-                ), patch("trade_alert.app.notify", return_value=True):
+                ), patch("trade_alert.app.notify", return_value=True) as notification:
                     result = await run_once(
                         Config(),
                         store,
@@ -46,6 +46,12 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
                 alerts = store.recent_alerts()
                 self.assertEqual("Oil rises after Iran supply disruption", alerts[0].headline)
                 self.assertEqual("Reuters", alerts[0].provider)
+                self.assertEqual(item.key, notification.call_args.kwargs["item_key"])
+                with patch("trade_alert.notifier.webbrowser.open_new_tab", return_value=True) as browser:
+                    self.assertTrue(notification.call_args.kwargs["on_click"]())
+                browser.assert_called_once_with("https://example.test/story-1")
+                self.assertEqual([1, 0], callback_counts)
+                self.assertEqual(0, store.unread_alert_count())
             finally:
                 store.close()
 
@@ -67,6 +73,26 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
                     result = await run_once(Config(), store)
 
                 self.assertEqual(0, result["notified"])
+                self.assertEqual(1, store.unread_alert_count())
+            finally:
+                store.close()
+
+    async def test_existing_history_row_does_not_send_another_toast(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            item = Headline(source="DTV_NEWS_FLOW", item_id="retained",
+                            title="Oil supply outage", published=time.time())
+            try:
+                store.record_alert(item_key=item.key, source=item.source,
+                                   headline=item.title, body="body", score=4)
+                with (
+                    patch("trade_alert.app._collect", new=AsyncMock(
+                        return_value=([item], True, False, True))),
+                    patch("trade_alert.app.notify") as notification,
+                ):
+                    result = await run_once(Config(), store)
+                self.assertEqual(0, result["notified"])
+                notification.assert_not_called()
                 self.assertEqual(1, store.unread_alert_count())
             finally:
                 store.close()

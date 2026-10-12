@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 from .config import Config
 from .trump_filter import classify_trump_statement
 from .event_evidence import assess_truth_evidence
-from .notifier import notify
+from .notifier import alert_click, notify
 from .state import StateStore
 
 RSS_URL = "https://www.trumpstruth.org/feed"
@@ -191,7 +191,6 @@ async def read_rss_once(config: Config, store: StateStore, *,
         except ValueError:
             pass
     seen_count = notified = alerted = 0
-    notification = notification or notify
     for post in sorted(result.posts, key=lambda p: p.published):
         key = "TRUMP_TRUTH_RSS:" + post.key
         if store.seen(key):
@@ -233,7 +232,11 @@ async def read_rss_once(config: Config, store: StateStore, *,
                 alert_callback(store.unread_alert_count())
             except Exception:
                 logging.exception("RSS unread count callback failed")
-        if notification(f"Trade Alert · Trump {signal.priority} · {signal.category} (RSS)", body):
+        send = notification or (lambda title, text: notify(
+            title, text, item_key=key,
+            on_click=alert_click(store.path, key, alert_callback),
+        ))
+        if send(f"Trade Alert · Trump {signal.priority} · {signal.category} (RSS)", body):
             notified += 1
         else:
             logging.error("RSS alert saved but Windows toast was not accepted")

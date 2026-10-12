@@ -21,7 +21,7 @@ from .config import Config
 from .trump_filter import classify_trump_statement
 from .event_evidence import assess_truth_evidence
 from .media_ocr import extract_image_text, image_url_from_post
-from .notifier import notify
+from .notifier import alert_click, notify
 from .state import StateStore
 
 ACCOUNT_ID = "107780257626128497"
@@ -249,7 +249,6 @@ async def read_direct_once(config: Config, store: StateStore, *,
     store.set_meta("truth_direct_last_error", "")
     initial = store.get_meta("truth_direct_initialized") is None
     discovered = emitted = notified = media_skipped = media_deferred = 0
-    notification = notification or notify
     for post in sorted(result.posts, key=lambda x: x.published):
         key = "TRUTH_PUBLIC:" + post.post_id
         if store.seen(key):
@@ -331,7 +330,11 @@ async def read_direct_once(config: Config, store: StateStore, *,
                 alert_callback(store.unread_alert_count())
             except Exception:
                 logging.exception("Direct-source unread callback failed")
-        if notification(f"Trade Alert · Trump {signal.priority} · {signal.category}", body):
+        send = notification or (lambda title, text: notify(
+            title, text, item_key=key,
+            on_click=alert_click(store.path, key, alert_callback),
+        ))
+        if send(f"Trade Alert · Trump {signal.priority} · {signal.category}", body):
             notified += 1
         else:
             logging.error("Direct-source alert saved, Windows toast failed: %s", key)

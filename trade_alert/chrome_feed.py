@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import Config
-from .notifier import notify
+from .notifier import alert_click, notify
 from .state import StateStore
 from .truth_direct import DirectUnavailable, parse_statuses
 from .media_ocr import extract_image_text, image_url_from_post
@@ -45,7 +45,6 @@ def poll_browser_feed(
     if not folder.is_dir():
         return stats
     now = time.time() if at is None else float(at)
-    notification = notification or notify
     for path in sorted(folder.glob("post-*.json"))[:MAX_FILES]:
         stats["files"] += 1
         retain_for_retry = False
@@ -144,7 +143,11 @@ def poll_browser_feed(
                     alert_callback(store.unread_alert_count())
                 except Exception:
                     logging.exception("Chrome bridge unread callback failed")
-            if notification(f"Trade Alert · Trump {signal.priority} · {signal.category}", body):
+            send = notification or (lambda title, text: notify(
+                title, text, item_key=key,
+                on_click=alert_click(store.path, key, alert_callback),
+            ))
+            if send(f"Trade Alert · Trump {signal.priority} · {signal.category}", body):
                 stats["notified"] += 1
             else:
                 logging.error("Chrome bridge alert stored but Windows toast failed")

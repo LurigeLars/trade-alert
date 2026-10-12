@@ -131,7 +131,7 @@ class IndependentBreakingLoop(unittest.IsolatedAsyncioTestCase):
                 with patch("trade_alert.app.run_once", new=hanging_news), \
                      patch("trade_alert.breaking.inbox_path", return_value=inbox), \
                      patch("trade_alert.breaking.notify",
-                           side_effect=lambda t,b: notifications.append(b) or True):
+                           side_effect=lambda t,b,**kwargs: notifications.append(b) or True):
                     task = asyncio.create_task(run_loop(cfg, store, stop_event=stop))
                     await asyncio.sleep(0.55)
                     stop.set()

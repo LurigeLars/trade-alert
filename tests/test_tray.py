@@ -190,7 +190,7 @@ class TrayTests(unittest.TestCase):
         self.assertIsNone(normalize_news_link("//example.test/story"))
         self.assertIsNone(normalize_news_link(""))
 
-    def test_legacy_dtv_alert_does_not_claim_later_observation_as_first_seen(self):
+    def test_history_only_shows_publication_timestamp(self):
         record = AlertRecord(
             item_key="legacy",
             created_at=120.0,
@@ -204,10 +204,13 @@ class TrayTests(unittest.TestCase):
             link=None,
             unread=False,
         )
-        text = format_alert_history([record], 0)
-        self.assertIn("DTV först sedd: ≤", text)
-        self.assertIn("exakt tid ej mätt", text)
-        self.assertNotIn("1970-01-01 01:02:10", text)
+        with patch("trade_alert.tray._local_timestamp", return_value="publication-time") as timestamp:
+            text = format_alert_history([record], 0)
+        timestamp.assert_called_once_with(90.0)
+        self.assertIn("Publicerad:", text)
+        self.assertNotIn("DTV först sedd", text)
+        self.assertNotIn("registrerad", text)
+        self.assertEqual(1, text.count("publication-time"))
 
     def test_alert_history_keeps_full_headline_and_link(self):
         record = AlertRecord(
@@ -228,8 +231,9 @@ class TrayTests(unittest.TestCase):
         self.assertIn("A complete oil market headline", text)
         self.assertIn("Reuters", text)
         self.assertIn("relevans 4", text)
-        self.assertIn("DTV först sedd:", text)
-        self.assertIn("Alert registrerad:", text)
+        self.assertIn("Publicerad:", text)
+        self.assertNotIn("DTV först sedd:", text)
+        self.assertNotIn("registrerad", text)
         self.assertIn("https://example.test/story", text)
 
 
@@ -261,6 +265,8 @@ class TrayTests(unittest.TestCase):
                 patch("trade_alert.tray._show_text_window") as window,
             ):
                 controller._show_alert_history(None, None)
+                self.assertEqual(30, controller._unread_count)
+                window.call_args.kwargs["on_shown"]()
                 self.assertEqual(20, controller._unread_count)
                 text = window.call_args.args[1]
                 self.assertIn("Olästa före öppning: 30", text)
@@ -274,6 +280,8 @@ class TrayTests(unittest.TestCase):
                 )
 
                 expanded_text = window.call_args.kwargs["on_show_all"]()
+                self.assertEqual(20, controller._unread_count)
+                window.call_args.kwargs["on_shown"]()
                 self.assertIn("Senaste 30 alerts:", expanded_text)
                 self.assertIn("Headline 0", expanded_text)
                 self.assertEqual(0, controller._unread_count)
@@ -313,6 +321,8 @@ class TrayTests(unittest.TestCase):
                 patch("trade_alert.tray._show_text_window") as window,
             ):
                 controller._show_alert_history(None, None)
+                self.assertEqual(10, controller._unread_count)
+                window.call_args.kwargs["on_shown"]()
                 self.assertEqual(0, controller._unread_count)
                 self.assertIsNone(window.call_args.kwargs["show_all_label"])
                 self.assertIsNone(window.call_args.kwargs["on_show_all"])

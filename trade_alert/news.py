@@ -7,8 +7,36 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
+from urllib.parse import unquote, urlsplit
 
 from .mcp_client import MCPToolError, call_json_tool
+
+
+def normalize_news_link(value: str | None) -> str | None:
+    """Validate provider URLs; only /news/ paths may be relative to TradingView."""
+    if not isinstance(value, str):
+        return None
+    if any(ord(c) < 32 or ord(c) == 127 for c in value):
+        return None
+    raw = value.strip()
+    if not raw or any(c.isspace() for c in raw) or "\\" in raw:
+        return None
+    candidate = "https://www.tradingview.com" + raw if raw.startswith("/news/") else raw
+    try:
+        parsed = urlsplit(candidate)
+        host = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return None
+    if (parsed.scheme.lower() != "https" or not host or parsed.username is not None
+            or parsed.password is not None or port not in (None, 443)):
+        return None
+    if host.lower() in {"tradingview.com", "www.tradingview.com"}:
+        path = unquote(parsed.path)
+        if (not path.startswith("/news/") or not path.removeprefix("/news/").strip("/")
+                or "\\" in path or any(part in {".", ".."} for part in path.split("/"))):
+            return None
+    return candidate
 
 
 CORE_TERM_LABELS = (
