@@ -13,6 +13,7 @@ from trade_alert.tray import (
     monitoring_summary,
     normalize_news_link,
     resolve_theme,
+    save_static_shortcut_icon,
     theme_palette,
     TrayController,
 )
@@ -70,6 +71,28 @@ class TrayTests(unittest.TestCase):
             image = make_status_icon(health)
             self.assertEqual((64, 64), image.size)
             self.assertEqual("RGBA", image.mode)
+
+    def test_static_shortcut_ico_reuses_tray_art_without_unread_badge(self):
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "icons" / "Trade Alert.ico"
+            generated = save_static_shortcut_icon(path)
+            self.assertEqual(path, generated)
+            self.assertTrue(path.is_file())
+
+            with Image.open(path) as ico:
+                self.assertEqual("ICO", ico.format)
+                self.assertEqual((64, 64), ico.size)
+                self.assertIn((16, 16), ico.info["sizes"])
+                self.assertIn((32, 32), ico.info["sizes"])
+                self.assertIn((64, 64), ico.info["sizes"])
+                # The green healthy motif is static; unread badges belong only
+                # to the live tray icon, not the pinned taskbar shortcut.
+                self.assertEqual(
+                    make_status_icon("ok", unread=0).getpixel((51, 11)),
+                    ico.convert("RGBA").getpixel((51, 11)),
+                )
 
     def test_unread_alert_adds_badge(self):
         normal = make_status_icon("ok", unread=0)

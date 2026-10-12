@@ -58,6 +58,22 @@ def make_status_icon(health: Health = "waiting", unread: int = 0) -> Image.Image
     return image
 
 
+def save_static_shortcut_icon(path: str | Path) -> Path:
+    """Save the base Trade Alert tray artwork as a Windows shortcut icon.
+
+    The static shortcut uses the healthy green motif without the transient
+    unread badge. Its image is generated locally, never stored in the repo.
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    make_status_icon("ok", unread=0).save(
+        target,
+        format="ICO",
+        sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64)],
+    )
+    return target
+
+
 def monitoring_summary(
     config: Config,
     *,
