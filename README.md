@@ -146,6 +146,8 @@ This avoids obvious false positives such as unrelated headlines containing gener
 
 On the first News Flow activation, older headlines are baselined so an upgrade does not produce a burst of stale notifications.
 
+Truth Social image OCR also recognizes tightly scoped geopolitical naval phrases such as `IRANIAN SHIPS`, even when the demonym occurs without the literal place name `Iran`. An account-posted comparison graphic (for example `Other Presidents / Trump`) is a **STANDARD contextual alert**, not verified evidence of a newly sunk vessel. On OCR failures, fresh image-dependent direct/Chrome posts are deferred for 60 seconds instead of being permanently marked seen; relevant caption-only actions are still delivered immediately. Retries stop at the configured source freshness limit (typically 300 seconds). This cannot recover a post already marked seen by an older running process or a post never received from its source.
+
 ## Tray UI
 
 The tray menu exposes:

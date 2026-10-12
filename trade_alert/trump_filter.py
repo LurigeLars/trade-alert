@@ -91,6 +91,15 @@ IRAN_UNREST = re.compile(
     r"\b(?:protest(?:s|ers|ing)?|unrest|uprising)\b.{0,120}\biranian(?:s)?\b",
     re.IGNORECASE,
 )
+
+# "Iranian" alone is too broad (people, rugs, art). Coupled to military
+# vessels, it is a meaningful geopolitical subject even without literal "Iran".
+# A comparison graphic is context, NOT evidence of a newly sunk ship.
+IRANIAN_NAVAL = re.compile(
+    r"\biranian\s+(?:(?:navy|naval|military)\s+)?"
+    r"(?:warships?|ships?|vessels?|boats?|fleet)\b",
+    re.IGNORECASE,
+)
 ENERGY = _words(
     "oil", "crude", "brent", "wti", "opec", "gasoline", "diesel",
     "refinery", "refineries", "lng", "natural gas", "pipeline",
@@ -240,7 +249,7 @@ def classify_trump_statement(text: str) -> TrumpSignal:
     energy_context = bool(ENERGY.search(excerpt) or ENERGY_CONTEXT.search(excerpt))
     if energy_context:
         candidates.append((max(4, legacy), "ENERGY"))
-    if GEO.search(excerpt) or IRAN_UNREST.search(excerpt):
+    if GEO.search(excerpt) or IRAN_UNREST.search(excerpt) or IRANIAN_NAVAL.search(excerpt):
         geo_score = 6 if (POLICY_ACTION.search(excerpt)
                           and _words("attack", "attacks", "attacking",
                                      "strike", "strikes", "military", "blockade",

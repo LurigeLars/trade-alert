@@ -248,18 +248,29 @@ async def read_direct_once(config: Config, store: StateStore, *,
         moment, tz=timezone.utc).isoformat())
     store.set_meta("truth_direct_last_error", "")
     initial = store.get_meta("truth_direct_initialized") is None
-    discovered = emitted = notified = media_skipped = 0
+    discovered = emitted = notified = media_skipped = media_deferred = 0
     notification = notification or notify
     for post in sorted(result.posts, key=lambda x: x.published):
         key = "TRUTH_PUBLIC:" + post.post_id
         if store.seen(key):
             continue
         discovered += 1
-        store.mark_seen(key, at=moment)
         age = moment - post.published
         if initial or age > config.truth_direct_max_age_seconds or age < -120:
+            store.mark_seen(key, at=moment)
             continue
         image_text = ""
+        caption_relevant = classify_trump_statement(post.text).score >= config.notification_min_score
+        retry_key = "truth_direct_image_retry:" + post.post_id
+        if (post.media_url or post.media_only) and not caption_relevant:
+            retry_at = store.get_meta(retry_key)
+            if retry_at is not None:
+                try:
+                    if moment < float(retry_at):
+                        media_deferred += 1
+                        continue
+                except ValueError:
+                    pass
         if post.media_url:
             image_text, ocr_status = await asyncio.to_thread(
                 extract_image_text, {
@@ -269,9 +280,20 @@ async def read_direct_once(config: Config, store: StateStore, *,
             if ocr_status != "OCR_OK":
                 logging.warning("Direct image post %s OCR: %s", post.post_id, ocr_status)
                 media_skipped += 1
+                if not caption_relevant:
+                    # Defer image-only or image-dependent posts for bounded retry
+                    # while fresh. Never suppress a relevant caption on OCR failure.
+                    store.set_meta(retry_key, str(moment + 60))
+                    media_deferred += 1
+                    continue
         elif post.media_only:
             media_skipped += 1
+            if not caption_relevant:
+                store.set_meta(retry_key, str(moment + 60))
+                media_deferred += 1
+                continue
         if not post.text and not image_text:
+            store.mark_seen(key, at=moment)
             continue
         analysis_text = " ".join(x for x in (post.text, image_text) if x)
         evidence = assess_truth_evidence(
@@ -281,7 +303,9 @@ async def read_direct_once(config: Config, store: StateStore, *,
         signal = evidence.signal
         score = signal.score
         if score < config.notification_min_score:
+            store.mark_seen(key, at=moment)
             continue
+        store.mark_seen(key, at=moment)
         text = post.text[:450] or "[Ingen inläggstext]"
         ocr_label = ("\n[Bildtext via lokal OCR] " + image_text[:650]) if image_text else ""
         body = (
@@ -317,5 +341,6 @@ async def read_direct_once(config: Config, store: StateStore, *,
     return {
         "status": "BASELINED" if initial and result.posts else "COMPLETE",
         "new": discovered, "alerted": emitted, "notified": notified,
-        "media_skipped": media_skipped, "items_returned": len(result.posts),
+        "media_skipped": media_skipped, "media_deferred": media_deferred,
+        "items_returned": len(result.posts),
     }

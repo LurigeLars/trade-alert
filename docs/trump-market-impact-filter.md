@@ -97,6 +97,12 @@ re-evaluates OCR text in a saved benchmark JSON. **The original 50-image
 benchmark does not contain captions**; the replay therefore gives an OCR-only
 upper/lower-bound diagnostic, not exact predictions of live post notifications.
 
+## Iranian naval image comparisons and OCR failures
+
+A standalone demonym (e.g. `Iranian artists`) does not produce an alert. Coupling `Iranian` with a naval asset (`ships`, `warships`, `naval vessels`, `boats`, `fleet`) produces a **STANDARD / GEOPOLITICS** context alert even without the literal country token `Iran`. A graphic contrasting `Other Presidents` and `Trump` is labelled `DATA_CONTEXT`: the post is real source material, but its military implication is not independently verified.
+
+When a recent direct or Chrome post has no independently relevant caption and its attached image fails OCR/fetch, it stays eligible for bounded retry (60-second backoff until the existing 300-second freshness limit). Chrome retains the local queued file until success or expiry. A caption containing a relevant immediate action still triggers without waiting for image OCR. A post consumed by an older process or not received by any configured intake source cannot be repaired retroactively.
+
 ## Public image text
 
 The Chrome public-account bridge and the verified direct public account

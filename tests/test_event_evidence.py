@@ -80,6 +80,16 @@ class EvidenceRulesTests(unittest.TestCase):
         self.assertIn("third-party", result.reason)
         self.assertEqual(result.verification, "INDEPENDENT_CONFIRMATION_NOT_CHECKED")
 
+    def test_iranian_ships_infographic_is_context_not_a_verified_attack(self):
+        result = assess_truth_evidence(
+            caption="", image_text="159 IRANIAN SHIPS Other Presidents Trump",
+        )
+        self.assertEqual(result.event_kind, "DATA_CONTEXT")
+        self.assertEqual(result.signal.category, "GEOPOLITICS")
+        self.assertEqual(result.signal.priority, "STANDARD")
+        self.assertEqual(result.signal.score, 4)
+        self.assertEqual(result.verification, "INDEPENDENT_CONFIRMATION_NOT_CHECKED")
+
     def test_generic_future_condition_is_not_blocked(self):
         msg = "We will impose tariffs unless the trade talks succeed."
         result = assess_truth_evidence(caption=msg)
@@ -123,6 +133,34 @@ class EvidenceIntakeTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 store.close()
 
+    async def test_direct_iranian_ships_image_creates_contextual_standard_alert(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(Path(tmp) / "state.db")
+            store.set_meta("truth_direct_initialized", "previous")
+            try:
+                result = DirectResult((
+                    DirectPost(
+                        "117111111111111199", "", T0,
+                        "https://truthsocial.com/@realDonaldTrump/117111111111111199",
+                        media_url=IMAGE_URL,
+                    ),
+                ), fetched_at=T0 + 5)
+                notices = []
+                with patch("trade_alert.truth_direct.extract_image_text",
+                           return_value=("159 IRANIAN SHIPS Other Presidents Trump", "OCR_OK")):
+                    output = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 8,
+                        notification=lambda *args: notices.append(args) or True,
+                    )
+                self.assertEqual(output["alerted"], 1)
+                self.assertEqual(output["notified"], 1)
+                self.assertIn("STANDARD", notices[0][0])
+                self.assertIn("Evidens: DATA_CONTEXT", notices[0][1])
+                self.assertIn("EJ KONTROLLERAD", notices[0][1])
+                self.assertEqual(1, store.unread_alert_count())
+            finally:
+                store.close()
+
     async def test_direct_primary_policy_claim_keeps_immediate_high(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StateStore(Path(tmp) / "state.db")
@@ -148,6 +186,115 @@ class EvidenceIntakeTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("HIGH", notices[0][0])
                 self.assertIn("Evidens: ACTION_CLAIM", notices[0][1])
                 self.assertIn("EJ KONTROLLERAD", notices[0][1])
+            finally:
+                store.close()
+
+    async def test_direct_failed_image_retries_while_post_is_fresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(Path(tmp) / "state.db")
+            store.set_meta("truth_direct_initialized", "previous")
+            pid = "117111111111111188"
+            result = DirectResult((
+                DirectPost(pid, "", T0,
+                           "https://truthsocial.com/@realDonaldTrump/" + pid,
+                           media_url=IMAGE_URL),
+            ), fetched_at=T0 + 8)
+            notices = []
+            try:
+                with patch("trade_alert.truth_direct.extract_image_text",
+                           side_effect=[("", "OCR_FAILED"),
+                                        ("159 IRANIAN SHIPS Other Presidents Trump", "OCR_OK")]) as ocr:
+                    first = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 8,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(first["alerted"], 0)
+                    self.assertEqual(first["media_deferred"], 1)
+                    self.assertFalse(store.seen("TRUTH_PUBLIC:" + pid))
+
+                    waiting = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 20,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(waiting["alerted"], 0)
+                    self.assertEqual(ocr.call_count, 1)
+
+                    recovered = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 70,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(recovered["alerted"], 1)
+                    self.assertEqual(ocr.call_count, 2)
+                    self.assertTrue(store.seen("TRUTH_PUBLIC:" + pid))
+                    self.assertEqual(len(notices), 1)
+            finally:
+                store.close()
+
+    async def test_chrome_failed_image_remains_queued_until_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "inbox"
+            folder.mkdir()
+            store = StateStore(Path(tmp) / "state.db")
+            pid = "117111111111111187"
+            path = folder / ("post-" + pid + ".json")
+            row = {
+                "id": pid, "visibility": "public",
+                "created_at": datetime.fromtimestamp(
+                    T0, timezone.utc).isoformat(),
+                "account": {"id": ACCOUNT, "acct": "realDonaldTrump"},
+                "content": "",
+                "media_attachments": [{"type": "image", "url": IMAGE_URL}],
+            }
+            path.write_text(json.dumps(row))
+            notices = []
+            try:
+                with patch("trade_alert.chrome_feed.extract_image_text",
+                           side_effect=[("", "OCR_FAILED"),
+                                        ("159 IRANIAN SHIPS Other Presidents Trump", "OCR_OK")]) as ocr:
+                    first = poll_browser_feed(
+                        Config(chrome_bridge_enabled=True), store,
+                        directory=folder, at=T0 + 8,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(first["ocr_deferred"], 1)
+                    self.assertTrue(path.exists())
+                    self.assertFalse(store.seen("TRUTH_PUBLIC:" + pid))
+
+                    waiting = poll_browser_feed(
+                        Config(chrome_bridge_enabled=True), store,
+                        directory=folder, at=T0 + 20,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(waiting["ocr_deferred"], 1)
+                    self.assertEqual(ocr.call_count, 1)
+
+                    recovered = poll_browser_feed(
+                        Config(chrome_bridge_enabled=True), store,
+                        directory=folder, at=T0 + 70,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(recovered["alerts"], 1)
+                    self.assertEqual(ocr.call_count, 2)
+                    self.assertFalse(path.exists())
+                    self.assertTrue(store.seen("TRUTH_PUBLIC:" + pid))
+                    self.assertEqual(len(notices), 1)
+            finally:
+                store.close()
+
+    async def test_direct_relevant_caption_alerts_even_if_image_ocr_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(Path(tmp) / "state.db")
+            store.set_meta("truth_direct_initialized", "previous")
+            pid = "117111111111111186"
+            result = DirectResult((
+                DirectPost(pid, "We are attacking Iran tonight.", T0,
+                           "https://truthsocial.com/@realDonaldTrump/" + pid,
+                           media_url=IMAGE_URL),
+            ), fetched_at=T0 + 8)
+            notices = []
+            try:
+                with patch("trade_alert.truth_direct.extract_image_text",
+                           return_value=("", "OCR_FAILED")):
+                    out = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 8,
+                        notification=lambda *args: notices.append(args) or True)
+                self.assertEqual(out["alerted"], 1)
+                self.assertEqual(out["media_deferred"], 0)
+                self.assertTrue(store.seen("TRUTH_PUBLIC:" + pid))
             finally:
                 store.close()
 
