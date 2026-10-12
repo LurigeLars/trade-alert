@@ -8,6 +8,9 @@ from pathlib import Path
 from .config import app_dir
 
 
+MAX_ALERT_HISTORY = 30
+
+
 @dataclass(frozen=True, slots=True)
 class AlertRecord:
     item_key: str
@@ -99,7 +102,22 @@ class StateStore:
             WHERE substr(s.item_key, 1, length(a.source) + 1) = a.source || ':'
             """
         )
+        self._trim_alerts()
         self.con.commit()
+
+    def _trim_alerts(self) -> None:
+        """Retain only the 30 newest alerts; never remove dedupe evidence."""
+        self.con.execute(
+            """
+            DELETE FROM alerts
+            WHERE item_key IN (
+                SELECT item_key FROM alerts
+                ORDER BY created_at DESC, rowid DESC
+                LIMIT -1 OFFSET ?
+            )
+            """,
+            (MAX_ALERT_HISTORY,),
+        )
 
     def close(self) -> None:
         self.con.close()
@@ -197,8 +215,11 @@ class StateStore:
                 link,
             ),
         )
+        inserted = cursor.rowcount > 0
+        if inserted:
+            self._trim_alerts()
         self.con.commit()
-        return cursor.rowcount > 0
+        return inserted
 
     def unread_alert_count(self) -> int:
         row = self.con.execute("SELECT COUNT(*) FROM alerts WHERE unread=1").fetchone()
