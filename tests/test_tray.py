@@ -10,6 +10,7 @@ from trade_alert.tray import (
     _layout_information_panes,
     format_alert_history,
     make_status_icon,
+    make_window_icon,
     monitoring_summary,
     normalize_news_link,
     resolve_theme,
@@ -93,6 +94,32 @@ class TrayTests(unittest.TestCase):
                     make_status_icon("ok", unread=0).getpixel((51, 11)),
                     ico.convert("RGBA").getpixel((51, 11)),
                 )
+
+    def test_window_icon_is_static_app_branding_not_stale_unread_status(self):
+        brand = make_window_icon()
+        self.assertEqual(
+            brand.tobytes(), make_status_icon("ok", unread=0).tobytes()
+        )
+        for transient_health in ("waiting", "error", "paused"):
+            self.assertNotEqual(
+                brand.tobytes(),
+                make_status_icon(transient_health, unread=7).tobytes(),
+            )
+
+    def test_monitoring_dialog_uses_static_icon_even_when_tray_is_degraded(self):
+        controller = TrayController.__new__(TrayController)
+        controller.config = Config()
+        controller._health = "waiting"
+        controller._unread_count = 7
+        with (
+            patch("trade_alert.tray.StateStore"),
+            patch("trade_alert.tray._show_text_window") as window,
+        ):
+            controller._show_monitoring(None, None)
+        self.assertEqual(
+            window.call_args.args[3].tobytes(),
+            make_window_icon().tobytes(),
+        )
 
     def test_unread_alert_adds_badge(self):
         normal = make_status_icon("ok", unread=0)
@@ -241,6 +268,10 @@ class TrayTests(unittest.TestCase):
                 self.assertIn("Headline 29", text)
                 self.assertNotIn("Headline 0", text)
                 self.assertEqual("Visa alla 30", window.call_args.kwargs["show_all_label"])
+                self.assertEqual(
+                    window.call_args.args[3].tobytes(),
+                    make_window_icon().tobytes(),
+                )
 
                 expanded_text = window.call_args.kwargs["on_show_all"]()
                 self.assertIn("Senaste 30 alerts:", expanded_text)
