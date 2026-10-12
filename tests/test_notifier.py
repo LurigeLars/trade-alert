@@ -1,10 +1,7 @@
-import gc
 import pathlib
 import tempfile
 import threading
-import types
 import unittest
-import weakref
 from unittest.mock import Mock, patch
 
 from trade_alert import notifier
@@ -13,78 +10,40 @@ from trade_alert.state import MAX_ALERT_HISTORY, StateStore
 
 
 class NotifierTests(unittest.TestCase):
-    def setUp(self):
-        notifier._active_toasts.clear()
-        self.addCleanup(notifier._active_toasts.clear)
-
     def send(self, **kwargs):
-        from winrt.windows.ui import notifications
-        native = Mock()
         toaster = Mock()
         with (patch.object(notifier.os, 'name', 'nt'),
               patch.object(notifier, '_windows_toaster', return_value=toaster),
-              patch.object(notifications, 'ToastNotification', return_value=native) as constructor):
+              patch.object(notifier, '_click_url', return_value='http://127.0.0.1:12345/alerts/token') as register):
             accepted = notifier.notify('Trade Alert', 'Test', **kwargs)
-        constructor.assert_called_once_with(toaster._setup_toast.return_value.xmlDocument)
-        self.assertEqual(False, toaster._setup_toast.call_args.args[1])
-        self.assertEqual(['Trade Alert', 'Test'], toaster._setup_toast.call_args.args[0].text_fields)
-        return accepted, native, toaster
+        return accepted, toaster.show_toast.call_args.args[0], register
 
-    def test_native_notification_is_retained_with_stable_identity_and_bounded_history(self):
-        accepted, native, toaster = self.send(item_key='story-a', on_click=Mock())
+    def test_standard_web_activation_and_stable_identity(self):
+        action = Mock()
+        accepted, toast, register = self.send(item_key='story-a', on_click=action)
         self.assertTrue(accepted)
-        toaster.toastNotifier.show.assert_called_once_with(native)
-        self.assertEqual('alerts', native.group)
-        self.assertEqual(16, len(native.tag))
-        self.assertEqual(native.tag, self.send(item_key='story-a', on_click=Mock())[1].tag)
-        self.assertNotEqual(native.tag, self.send(item_key='story-b', on_click=Mock())[1].tag)
-        accepted, retained, _ = self.send(item_key='retain', on_click=Mock())
-        reference = weakref.ref(retained)
-        del retained
-        gc.collect()
-        self.assertIsNotNone(reference())
-        for i in range(MAX_ALERT_HISTORY):
-            self.send(item_key=str(i), on_click=Mock())
-        self.assertEqual(MAX_ALERT_HISTORY, len(notifier._active_toasts))
+        self.assertEqual(['Trade Alert', 'Test'], toast.text_fields)
+        self.assertEqual('http://127.0.0.1:12345/alerts/token', toast.launch_action)
+        register.assert_called_once_with(action)
+        self.assertEqual('alerts', toast.group)
+        self.assertEqual(16, len(toast.tag))
+        self.assertEqual(toast.tag, self.send(item_key='story-a')[1].tag)
+        self.assertNotEqual(toast.tag, self.send(item_key='story-b')[1].tag)
 
-    def invoke(self, native):
-        # Join only the callback worker; the real backend uses an ordinary daemon thread.
-        threads = []
-        real_thread = threading.Thread
-        def thread(**kwargs):
-            worker = real_thread(**kwargs)
-            threads.append(worker)
-            return worker
-        with patch.object(notifier.threading, 'Thread', side_effect=thread):
-            native.add_activated.call_args.args[0](native, object())
-        for worker in threads:
-            worker.join(timeout=5)
-            self.assertFalse(worker.is_alive())
-
-    def test_successful_click_is_handled_once(self):
-        action = Mock(return_value=True)
-        _, native, _ = self.send(item_key='target', on_click=action)
-        self.invoke(native)
-        self.invoke(native)
-        action.assert_called_once_with()
-
-    def test_failed_click_and_exception_are_retryable(self):
-        action = Mock(side_effect=[False, RuntimeError('browser failed'), True])
-        _, native, _ = self.send(item_key='target', on_click=action)
-        for _ in range(4):
-            self.invoke(native)
-        self.assertEqual(3, action.call_count)
-
-    def test_plain_test_notification_has_no_click_handler(self):
-        accepted, native, _ = self.send()
+    def test_plain_test_notification_has_no_click_listener(self):
+        accepted, toast, register = self.send()
         self.assertTrue(accepted)
-        native.add_activated.assert_not_called()
-        self.assertFalse(notifier._active_toasts)
+        self.assertIsNone(toast.launch_action)
+        register.assert_not_called()
 
-    def test_backend_failure_is_reported(self):
-        with patch.object(notifier, '_windows_toaster', side_effect=RuntimeError('boom')):
-            self.assertFalse(notifier.notify('Trade Alert', 'Test'))
-        self.assertFalse(notifier._active_toasts)
+    def test_backend_failure_is_reported_and_pending_action_removed(self):
+        notifier._click_actions['/alerts/token'] = (Mock(), threading.Lock())
+        toaster = Mock()
+        toaster.show_toast.side_effect = RuntimeError('boom')
+        with (patch.object(notifier, '_windows_toaster', return_value=toaster),
+              patch.object(notifier, '_click_url', return_value='http://127.0.0.1:12345/alerts/token')):
+            self.assertFalse(notifier.notify('Trade Alert', 'Test', on_click=Mock()))
+        self.assertNotIn('/alerts/token', notifier._click_actions)
 
     def test_registers_only_notification_display_identity(self):
         import winreg
@@ -112,6 +71,96 @@ class NotifierTests(unittest.TestCase):
                       'https://a.test:8443/x'):
             with self.subTest(value=value):
                 self.assertIsNone(normalize_news_link(value))
+
+
+class ClickListenerTests(unittest.TestCase):
+    def setUp(self):
+        notifier._click_actions.clear()
+        self.addCleanup(notifier._click_actions.clear)
+
+    @classmethod
+    def tearDownClass(cls):
+        if notifier._click_server is not None:
+            notifier._click_server.shutdown()
+            notifier._click_server.server_close()
+            notifier._click_server = None
+
+    def request(self, url, host=None):
+        from http.client import HTTPConnection
+        from urllib.parse import urlsplit
+        parsed = urlsplit(url)
+        client = HTTPConnection(parsed.hostname, parsed.port, timeout=5)
+        try:
+            client.request('GET', parsed.path, headers={'Host': host} if host else {})
+            response = client.getresponse()
+            return response.status, response.getheader('Location'), response.getheader('Cache-Control')
+        finally:
+            client.close()
+
+    def test_one_listener_loopback_only_bounded_unpredictable_tokens(self):
+        first = notifier._click_url(Mock())
+        server = notifier._click_server
+        self.assertEqual('127.0.0.1', server.server_address[0])
+        self.assertNotIn('headline', first)
+        self.assertGreaterEqual(len(first.rsplit('/', 1)[-1]), 32)
+        for _ in range(MAX_ALERT_HISTORY):
+            self.assertNotEqual(first, notifier._click_url(Mock()))
+            self.assertIs(server, notifier._click_server)
+        self.assertEqual(MAX_ALERT_HISTORY, len(notifier._click_actions))
+        self.assertEqual(410, self.request(first)[0])
+
+    def test_exact_redirect_read_acknowledgement_and_repeated_click(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = pathlib.Path(temp) / 'state.db'
+            store = StateStore(path)
+            store.record_alert(item_key='target',source='TEST',headline='Target',body='body',score=3,
+                               link='/news/reuters.com,2026:test/')
+            store.record_alert(item_key='control',source='TEST',headline='Control',body='body',score=3)
+            acknowledged = threading.Event()
+            url = notifier._click_url(notifier.alert_click(path,'target',lambda _n:acknowledged.set()))
+            self.assertEqual((303,'https://www.tradingview.com/news/reuters.com,2026:test/','no-store'),self.request(url))
+            self.assertTrue(acknowledged.wait(5))
+            records = {a.item_key:a for a in store.recent_alerts()}
+            self.assertFalse(records['target'].unread)
+            self.assertTrue(records['control'].unread)
+            self.assertEqual(410,self.request(url)[0])
+            store.close()
+
+    def test_concurrent_requests_dispatch_once(self):
+        done = threading.Event()
+        def action(open_article):
+            open_article('https://example.test/article')
+            done.set()
+            return True
+        callback = Mock(side_effect=action)
+        url = notifier._click_url(callback)
+        results = []
+        workers = [threading.Thread(target=lambda:results.append(self.request(url)[0])) for _ in range(4)]
+        for worker in workers: worker.start()
+        for worker in workers: worker.join(timeout=5)
+        self.assertTrue(done.wait(5))
+        self.assertEqual([303,410,410,410],sorted(results))
+        callback.assert_called_once()
+
+    def test_host_unknown_token_and_injected_query_never_invoke_callback(self):
+        callback = Mock()
+        url = notifier._click_url(callback)
+        self.assertEqual(403,self.request(url,host='evil.test')[0])
+        self.assertEqual(410,self.request(url+'unknown')[0])
+        # The exact request path must match; no caller-supplied redirect is accepted.
+        from http.client import HTTPConnection
+        client = HTTPConnection('127.0.0.1',notifier._click_server.server_port,timeout=5)
+        client.request('GET',url.split(str(notifier._click_server.server_port),1)[1]+'?url=https://evil.test')
+        self.assertEqual(410,client.getresponse().status)
+        client.close()
+        callback.assert_not_called()
+
+    def test_handler_failure_keeps_token_for_retry_without_redirect(self):
+        callback = Mock(side_effect=RuntimeError('failed'))
+        url = notifier._click_url(callback)
+        self.assertEqual(500,self.request(url)[0])
+        self.assertEqual(500,self.request(url)[0])
+        self.assertEqual(2,callback.call_count)
 
 
 class AlertClickTests(unittest.TestCase):
@@ -149,6 +198,23 @@ class AlertClickTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 notifier.alert_click(self.path, 'target')()
         self.assertEqual(2, self.store.unread_alert_count())
+
+    def test_failed_redirect_write_does_not_acknowledge_or_consume_click(self):
+        handler = object.__new__(notifier._ClickHandler)
+        handler.path = '/alerts/test-write-failure'
+        handler.server = Mock(server_port=12345)
+        handler.headers = {'Host':'127.0.0.1:12345'}
+        handler.send_response = Mock()
+        handler.send_header = Mock()
+        handler.end_headers = Mock()
+        handler.wfile = Mock()
+        handler.wfile.flush.side_effect = [ConnectionError('browser disconnected'), None]
+        notifier._click_actions[handler.path] = (notifier.alert_click(self.path,'target'),threading.Lock())
+        self.addCleanup(notifier._click_actions.pop, handler.path, None)
+        handler.do_GET()
+        self.assertEqual(2,self.store.unread_alert_count())
+        self.assertIn(handler.path,notifier._click_actions)
+        self.assertEqual(500,handler.send_response.call_args.args[0])
 
     def test_unknown_or_expired_key_never_opens_another_article(self):
         with patch.object(notifier.webbrowser, 'open_new_tab') as browser:
