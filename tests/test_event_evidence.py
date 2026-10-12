@@ -80,6 +80,16 @@ class EvidenceRulesTests(unittest.TestCase):
         self.assertIn("third-party", result.reason)
         self.assertEqual(result.verification, "INDEPENDENT_CONFIRMATION_NOT_CHECKED")
 
+    def test_iranian_ships_infographic_is_context_not_a_verified_attack(self):
+        result = assess_truth_evidence(
+            caption="", image_text="159 IRANIAN SHIPS Other Presidents Trump",
+        )
+        self.assertEqual(result.event_kind, "DATA_CONTEXT")
+        self.assertEqual(result.signal.category, "GEOPOLITICS")
+        self.assertEqual(result.signal.priority, "STANDARD")
+        self.assertEqual(result.signal.score, 4)
+        self.assertEqual(result.verification, "INDEPENDENT_CONFIRMATION_NOT_CHECKED")
+
     def test_generic_future_condition_is_not_blocked(self):
         msg = "We will impose tariffs unless the trade talks succeed."
         result = assess_truth_evidence(caption=msg)
@@ -120,6 +130,34 @@ class EvidenceIntakeTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(output["alerted"], 0)
                 self.assertEqual(output["notified"], 0)
                 self.assertTrue(store.seen("TRUTH_PUBLIC:117111111111111111"))
+            finally:
+                store.close()
+
+    async def test_direct_iranian_ships_image_creates_contextual_standard_alert(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(Path(tmp) / "state.db")
+            store.set_meta("truth_direct_initialized", "previous")
+            try:
+                result = DirectResult((
+                    DirectPost(
+                        "117111111111111199", "", T0,
+                        "https://truthsocial.com/@realDonaldTrump/117111111111111199",
+                        media_url=IMAGE_URL,
+                    ),
+                ), fetched_at=T0 + 5)
+                notices = []
+                with patch("trade_alert.truth_direct.extract_image_text",
+                           return_value=("159 IRANIAN SHIPS Other Presidents Trump", "OCR_OK")):
+                    output = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 8,
+                        notification=lambda *args: notices.append(args) or True,
+                    )
+                self.assertEqual(output["alerted"], 1)
+                self.assertEqual(output["notified"], 1)
+                self.assertIn("STANDARD", notices[0][0])
+                self.assertIn("Evidens: DATA_CONTEXT", notices[0][1])
+                self.assertIn("EJ KONTROLLERAD", notices[0][1])
+                self.assertEqual(1, store.unread_alert_count())
             finally:
                 store.close()
 
