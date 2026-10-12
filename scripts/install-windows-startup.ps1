@@ -39,6 +39,10 @@ $Shortcut.WindowStyle = 7
 $Shortcut.Description = 'Trade Alert tray app'
 $Shortcut.Save()
 
+# Install the same static base icon as the dynamically generated tray artwork.
+# Do this before stopping any existing monitoring process.
+& (Join-Path $PSScriptRoot 'set-windows-shortcut-icon.ps1')
+
 # Stop the legacy PowerShell runner and any old Trade Alert worker before replacing it.
 try {
     $Legacy = Get-CimInstance Win32_Process -ErrorAction Stop |

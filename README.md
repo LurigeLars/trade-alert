@@ -206,7 +206,14 @@ Install the per-user tray startup:
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows-startup.ps1
 ```
 
-The startup shortcut points directly to `.venv\Scripts\pythonw.exe`, so normal operation does not leave a terminal window open.
+The startup shortcut points directly to `.venv\Scripts\pythonw.exe`, so normal operation does not leave a terminal window open. The installer generates a local multi-size `%LOCALAPPDATA%\TradeAlert\trade-alert.ico` from the same artwork as the live tray icon and assigns it to the Startup shortcut (and matching pinned taskbar shortcuts when accessible). The static shortcut uses the healthy green motif without a stale unread badge. A Windows taskbar pin can cache its old icon, so unpin/repin if needed.
+
+To update **only the shortcut icon** without reinstalling or restarting live monitoring:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\set-windows-shortcut-icon.ps1
+```
+
 
 ## Configuration and local state
 
