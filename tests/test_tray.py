@@ -1,4 +1,6 @@
 import pathlib
+from datetime import datetime
+from dataclasses import replace
 import tempfile
 import threading
 import unittest
@@ -8,6 +10,7 @@ from trade_alert.config import Config
 from trade_alert.state import AlertRecord, StateStore
 from trade_alert.tray import (
     _layout_information_panes,
+    _local_timestamp,
     format_alert_history,
     make_status_icon,
     make_window_icon,
@@ -205,14 +208,14 @@ class TrayTests(unittest.TestCase):
             unread=False,
         )
         with patch("trade_alert.tray._local_timestamp", return_value="publication-time") as timestamp:
-            text = format_alert_history([record], 0)
+            text, links = format_alert_history([record], 0)
         timestamp.assert_called_once_with(90.0)
-        self.assertIn("Publicerad:", text)
+        self.assertNotIn("Publicerad:", text)
         self.assertNotIn("DTV först sedd", text)
         self.assertNotIn("registrerad", text)
         self.assertEqual(1, text.count("publication-time"))
 
-    def test_alert_history_keeps_full_headline_and_link(self):
+    def test_alert_history_is_two_lines_with_headline_link_metadata(self):
         record = AlertRecord(
             item_key="a",
             created_at=100.0,
@@ -226,16 +229,47 @@ class TrayTests(unittest.TestCase):
             link="https://example.test/story",
             unread=True,
         )
-        text = format_alert_history([record], 1)
+        with patch("trade_alert.tray._local_timestamp", return_value="22:37 12/10"):
+            text, links = format_alert_history([record], 1)
         self.assertIn("OLÄST", text)
         self.assertIn("A complete oil market headline", text)
         self.assertIn("Reuters", text)
-        self.assertIn("relevans 4", text)
-        self.assertIn("Publicerad:", text)
+        self.assertNotIn("relevans", text)
+        self.assertNotIn("Publicerad:", text)
         self.assertNotIn("DTV först sedd:", text)
         self.assertNotIn("registrerad", text)
-        self.assertIn("https://example.test/story", text)
+        self.assertNotIn("https://example.test/story", text)
+        self.assertNotIn("Källa:", text)
+        self.assertNotIn("Länk:", text)
+        self.assertEqual("[OLÄST] 22:37 12/10\nReuters · A complete oil market headline",
+                         text.split("Senaste 1 alerts:\n\n", 1)[1])
+        self.assertEqual([(6, "Reuters · ", "https://example.test/story")], links)
 
+    def test_publication_time_is_local_and_compact_or_unknown(self):
+        local = datetime(2026, 10, 12, 22, 37, 43)
+        self.assertEqual("22:37 12/10", _local_timestamp(local.timestamp()))
+        for value in (None, float("inf"), float("nan")):
+            self.assertEqual("okänd", _local_timestamp(value))
+
+    def test_duplicate_headlines_have_distinct_links_and_invalid_urls_stay_plain(self):
+        record = AlertRecord(item_key="one", created_at=0, published=None, dtv_first_seen=None,
+                             source="DTV_NEWS_FLOW", provider="Reuters", headline="Same headline",
+                             body="body", score=2, link="/news/story-one/", unread=True)
+        records = [record, replace(record, item_key="two", link="/news/story-two/"),
+                   replace(record, item_key="three", link="javascript:bad"),
+                   replace(record, item_key="four", provider=None, link=None, unread=False)]
+        text, links = format_alert_history(records, 4)
+        self.assertEqual([(6, "Reuters · ", "https://www.tradingview.com/news/story-one/"),
+                          (9, "Reuters · ", "https://www.tradingview.com/news/story-two/")], links)
+        self.assertIn("[läst] okänd\nDTV_NEWS_FLOW · Same headline", text)
+
+    def test_provider_and_headline_newlines_do_not_change_link_target_rows(self):
+        record = AlertRecord(item_key="one", created_at=0, published=None, dtv_first_seen=None,
+                             source="TEST", provider="Reuters\nWorld", headline="Oil\r\nmarket update",
+                             body="body", score=2, link="https://example.test/article", unread=True)
+        text, links = format_alert_history([record, replace(record, item_key="two")], 2)
+        self.assertEqual("Reuters World · Oil market update", text.splitlines()[5])
+        self.assertEqual([6, 9], [line for line, _prefix, _url in links])
 
     def test_history_expands_to_30_and_marks_only_displayed_alerts_read(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -279,7 +313,7 @@ class TrayTests(unittest.TestCase):
                     make_window_icon().tobytes(),
                 )
 
-                expanded_text = window.call_args.kwargs["on_show_all"]()
+                expanded_text, expanded_links = window.call_args.kwargs["on_show_all"]()
                 self.assertEqual(20, controller._unread_count)
                 window.call_args.kwargs["on_shown"]()
                 self.assertIn("Senaste 30 alerts:", expanded_text)
