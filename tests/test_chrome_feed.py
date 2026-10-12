@@ -146,7 +146,9 @@ class ChromeBridgeTests(unittest.TestCase):
                                        directory=self.folder, at=self.now)
         self.assertEqual(result["ocr_unavailable"], 1)
         self.assertEqual(result["alerts"], 0)
-        self.assertTrue(self.store.seen("TRUTH_PUBLIC:" + ID1))
+        self.assertEqual(result["ocr_deferred"], 1)
+        self.assertFalse(self.store.seen("TRUTH_PUBLIC:" + ID1))
+        self.assertTrue((self.folder / ("post-" + ID1 + ".json")).exists())
 
     def test_config_opt_in_and_rejection_of_oversize(self):
         emit(self.folder, row(ID1, self.now - 4))

@@ -44,6 +44,14 @@ DATA_CONTEXT = re.compile(
     r"enrollment more than double)\b",
     re.IGNORECASE,
 )
+
+# Infographic juxtaposition is retrospective commentary, not a fresh military
+# event. Evaluate the source's claim without treating the graphic as evidence.
+PRESIDENTIAL_COMPARISON = re.compile(
+    r"\bother presidents?\b.{0,100}\btrump\b|"
+    r"\btrump\b.{0,100}\bother presidents?\b",
+    re.IGNORECASE | re.DOTALL,
+)
 # Indicates an apparent immediate policy claim from the account caption,
 # not proof that the claim is true or its contents have taken effect.
 CAPTION_ACTION = re.compile(
@@ -134,7 +142,8 @@ def assess_truth_evidence(
         reason = "Historical/retrospective context is not a new action"
         if image_text and not direct_action and score >= 6:
             score = 4
-    elif HISTORICAL_GRAPH.search(full_text) or DATA_CONTEXT.search(full_text):
+    elif (HISTORICAL_GRAPH.search(full_text) or DATA_CONTEXT.search(full_text)
+          or (image_text and PRESIDENTIAL_COMPARISON.search(image_text))):
         event_kind = "DATA_CONTEXT"
         reason = "Statistical/historical context; market novelty is unverified"
 

@@ -37,7 +37,8 @@ def poll_browser_feed(
     """Ingest a bounded, locally transferred batch. Never trust file attribution."""
     stats = {"files": 0, "alerts": 0, "notified": 0,
              "rejected": 0, "stale": 0, "duplicates": 0,
-             "ocr_ok": 0, "ocr_unavailable": 0, "ocr_failed": 0}
+             "ocr_ok": 0, "ocr_unavailable": 0, "ocr_failed": 0,
+             "ocr_deferred": 0}
     if not config.chrome_bridge_enabled:
         return stats
     folder = directory if directory is not None else browser_feed_path()
@@ -47,6 +48,7 @@ def poll_browser_feed(
     notification = notification or notify
     for path in sorted(folder.glob("post-*.json"))[:MAX_FILES]:
         stats["files"] += 1
+        retain_for_retry = False
         try:
             name = POST_FILENAME.fullmatch(path.name)
             if (not name or path.is_symlink() or not path.is_file()
@@ -67,10 +69,22 @@ def poll_browser_feed(
                 stats["duplicates"] += 1
                 continue
             age = now - post.published
-            store.mark_seen(key, at=now)
             if age < -120 or age > config.chrome_bridge_max_age_seconds:
+                store.mark_seen(key, at=now)
                 stats["stale"] += 1
                 continue
+            caption_relevant = classify_trump_statement(post.text).score >= config.notification_min_score
+            retry_key = "truth_chrome_image_retry:" + post.post_id
+            if image_url_from_post(row) and not caption_relevant:
+                retry_at = store.get_meta(retry_key)
+                if retry_at is not None:
+                    try:
+                        if now < float(retry_at):
+                            retain_for_retry = True
+                            stats["ocr_deferred"] += 1
+                            continue
+                    except ValueError:
+                        pass
             image_text = ""
             if image_url_from_post(row):
                 image_text, image_status = extract_image_text(row)
@@ -85,9 +99,15 @@ def poll_browser_feed(
                         "Chrome image post %s could not be assessed: %s",
                         post.post_id, image_status
                     )
+                    if not caption_relevant:
+                        store.set_meta(retry_key, str(now + 60))
+                        retain_for_retry = True
+                        stats["ocr_deferred"] += 1
+                        continue
             elif post.media_only:
                 logging.info("Chrome post %s has media without approved image URL", post.post_id)
             if not post.text and not image_text:
+                store.mark_seen(key, at=now)
                 continue
             analysis_text = " ".join(part for part in (post.text, image_text) if part)
             evidence = assess_truth_evidence(
@@ -97,7 +117,9 @@ def poll_browser_feed(
             signal = evidence.signal
             score = signal.score
             if score < config.notification_min_score:
+                store.mark_seen(key, at=now)
                 continue
+            store.mark_seen(key, at=now)
             caption = post.text[:450] if post.text else "[Ingen inläggstext]"
             image_evidence = ("\n[Bildtext via lokal OCR] " + image_text[:650]) if image_text else ""
             body = (f"Trump · {signal.priority} / {signal.category} · Chrome-källa\n"
@@ -132,8 +154,9 @@ def poll_browser_feed(
             logging.warning("Rejected Chrome bridge message %s: %s",
                             path.name, type(exc).__name__)
         finally:
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                logging.exception("Failed to remove processed Chrome bridge file")
+            if not retain_for_retry:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    logging.exception("Failed to remove processed Chrome bridge file")
     return stats
