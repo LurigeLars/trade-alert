@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw
 from .config import Config, app_dir
 from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS, OIL_ROUTING_SYMBOLS
 from .notifier import notify
-from .state import AlertRecord, StateStore
+from .state import MAX_ALERT_HISTORY, AlertRecord, StateStore
 from .windows_ui import (
     allow_windows_dark_mode_for_window,
     configure_windows_native_menu_theme,
@@ -270,6 +270,9 @@ def _show_text_window(
     text: str,
     theme_mode: str,
     app_icon: Image.Image | None = None,
+    *,
+    show_all_label: str | None = None,
+    on_show_all: Callable[[], str] | None = None,
 ) -> None:
     """Open a selectable, copyable information window using the effective theme."""
     if os.name != "nt":
@@ -329,49 +332,62 @@ def _show_text_window(
         text_widget.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=text_widget.yview)
 
-        text_widget.insert("1.0", text)
+        current_text = text
 
-        headings = {"Profil", "Källor", "Polling", "Alertfilter", "Första News Flow-start", "Modell"}
-        text_widget.tag_configure("heading", font=("Segoe UI Semibold", 10))
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            if line.strip() in headings:
-                text_widget.tag_add("heading", f"{line_number}.0", f"{line_number}.end")
+        def render_text(content: str) -> None:
+            nonlocal current_text
+            current_text = content
+            text_widget.configure(state="normal")
+            text_widget.delete("1.0", "end")
+            for old_tag in text_widget.tag_names():
+                if old_tag.startswith("hyperlink_"):
+                    text_widget.tag_delete(old_tag)
+            text_widget.insert("1.0", current_text)
 
-        for link_number, line in enumerate(text.splitlines(), start=1):
-            if not line.startswith("Länk: "):
-                continue
-            raw_link = line[len("Länk: "):].strip()
-            browser_url = normalize_news_link(raw_link)
-            if browser_url is None:
-                continue
+            headings = {"Profil", "Källor", "Polling", "Alertfilter", "Första News Flow-start", "Modell"}
+            text_widget.tag_configure("heading", font=("Segoe UI Semibold", 10))
+            for line_number, line in enumerate(current_text.splitlines(), start=1):
+                if line.strip() in headings:
+                    text_widget.tag_add("heading", f"{line_number}.0", f"{line_number}.end")
 
-            tag = f"hyperlink_{link_number}"
-            start = f"{link_number}.{len('Länk: ')}"
-            end = f"{link_number}.{len(line)}"
-            text_widget.tag_add(tag, start, end)
-            text_widget.tag_configure(
-                tag,
-                foreground=palette["link"],
-                underline=True,
-            )
+            for link_number, line in enumerate(current_text.splitlines(), start=1):
+                if not line.startswith("Länk: "):
+                    continue
+                raw_link = line[len("Länk: "):].strip()
+                browser_url = normalize_news_link(raw_link)
+                if browser_url is None:
+                    continue
 
-            def open_link(_event, url=browser_url):
-                webbrowser.open_new_tab(url)
-                return "break"
+                tag = f"hyperlink_{link_number}"
+                start = f"{link_number}.{len('Länk: ')}"
+                end = f"{link_number}.{len(line)}"
+                text_widget.tag_add(tag, start, end)
+                text_widget.tag_configure(
+                    tag,
+                    foreground=palette["link"],
+                    underline=True,
+                )
 
-            def link_enter(_event, name=tag):
-                text_widget.configure(cursor="hand2")
-                text_widget.tag_configure(name, foreground=palette["link_hover"])
+                def open_link(_event, url=browser_url):
+                    webbrowser.open_new_tab(url)
+                    return "break"
 
-            def link_leave(_event, name=tag):
-                text_widget.configure(cursor="xterm")
-                text_widget.tag_configure(name, foreground=palette["link"])
+                def link_enter(_event, name=tag):
+                    text_widget.configure(cursor="hand2")
+                    text_widget.tag_configure(name, foreground=palette["link_hover"])
 
-            text_widget.tag_bind(tag, "<Button-1>", open_link)
-            text_widget.tag_bind(tag, "<Enter>", link_enter)
-            text_widget.tag_bind(tag, "<Leave>", link_leave)
+                def link_leave(_event, name=tag):
+                    text_widget.configure(cursor="xterm")
+                    text_widget.tag_configure(name, foreground=palette["link"])
 
-        text_widget.configure(state="disabled")
+                text_widget.tag_bind(tag, "<Button-1>", open_link)
+                text_widget.tag_bind(tag, "<Enter>", link_enter)
+                text_widget.tag_bind(tag, "<Leave>", link_leave)
+
+            text_widget.configure(state="disabled")
+            text_widget.yview_moveto(0.0)
+
+        render_text(text)
 
         button_bar = tk.Frame(outer, bg=palette["window"], pady=10)
         button_bar.pack(fill="x")
@@ -394,7 +410,7 @@ def _show_text_window(
 
         def copy_all() -> None:
             root.clipboard_clear()
-            root.clipboard_append(text)
+            root.clipboard_append(current_text)
             root.update()
 
         def new_button(label: str, command):
@@ -415,6 +431,18 @@ def _show_text_window(
             )
 
         new_button("Kopiera allt", copy_all).pack(side="left")
+        if on_show_all is not None:
+            def expand_history() -> None:
+                try:
+                    expanded_text = on_show_all()
+                except Exception:
+                    logging.exception("Could not expand Trade Alert history")
+                    return
+                render_text(expanded_text)
+                show_all_button.destroy()
+
+            show_all_button = new_button(show_all_label or "Visa alla", expand_history)
+            show_all_button.pack(side="left", padx=(8, 0))
         new_button("Stäng", root.destroy).pack(side="right")
 
         text_widget.bind("<Control-a>", select_all)
@@ -627,12 +655,23 @@ class TrayController:
         store = StateStore()
         try:
             unread_before = store.unread_alert_count()
-            alerts = store.recent_alerts(limit=10)
-            text = format_alert_history(alerts, unread_before)
-            store.mark_alerts_read([alert.item_key for alert in alerts])
+            alerts = store.recent_alerts(limit=MAX_ALERT_HISTORY)
+            visible = alerts[:10]
+            text = format_alert_history(visible, unread_before)
+            store.mark_alerts_read([alert.item_key for alert in visible])
             self._unread_count = store.unread_alert_count()
         finally:
             store.close()
+
+        def show_all() -> str:
+            expanded_store = StateStore()
+            try:
+                expanded_store.mark_alerts_read([alert.item_key for alert in alerts[10:]])
+                self._unread_count = expanded_store.unread_alert_count()
+            finally:
+                expanded_store.close()
+            self._refresh_tray()
+            return format_alert_history(alerts, unread_before)
 
         self._refresh_tray()
         _show_text_window(
@@ -640,6 +679,8 @@ class TrayController:
             text,
             self.config.theme_mode,
             make_status_icon(self._health, self._unread_count),
+            show_all_label=f"Visa alla {len(alerts)}" if len(alerts) > 10 else None,
+            on_show_all=show_all if len(alerts) > 10 else None,
         )
 
     def _test_notification(self, _icon, _item) -> None:

@@ -1,8 +1,11 @@
+import pathlib
+import tempfile
 import threading
 import unittest
+from unittest.mock import Mock, patch
 
 from trade_alert.config import Config
-from trade_alert.state import AlertRecord
+from trade_alert.state import AlertRecord, StateStore
 from trade_alert.tray import (
     format_alert_history,
     make_status_icon,
@@ -146,6 +149,87 @@ class TrayTests(unittest.TestCase):
         self.assertIn("DTV först sedd:", text)
         self.assertIn("Alert registrerad:", text)
         self.assertIn("https://example.test/story", text)
+
+
+    def test_history_expands_to_30_and_marks_only_displayed_alerts_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "state.db"
+            store = StateStore(path)
+            try:
+                for number in range(30):
+                    store.record_alert(
+                        item_key=f"story-{number}",
+                        source="DTV_NEWS_FLOW",
+                        headline=f"Headline {number}",
+                        body="body",
+                        score=3,
+                        at=100.0 + number,
+                    )
+            finally:
+                store.close()
+
+            controller = TrayController.__new__(TrayController)
+            controller.config = Config()
+            controller._health = "ok"
+            controller._unread_count = 30
+            controller._refresh_tray = Mock()
+
+            with (
+                patch("trade_alert.tray.StateStore", side_effect=lambda: StateStore(path)),
+                patch("trade_alert.tray._show_text_window") as window,
+            ):
+                controller._show_alert_history(None, None)
+                self.assertEqual(20, controller._unread_count)
+                text = window.call_args.args[1]
+                self.assertIn("Olästa före öppning: 30", text)
+                self.assertIn("Senaste 10 alerts:", text)
+                self.assertIn("Headline 29", text)
+                self.assertNotIn("Headline 0", text)
+                self.assertEqual("Visa alla 30", window.call_args.kwargs["show_all_label"])
+
+                expanded_text = window.call_args.kwargs["on_show_all"]()
+                self.assertIn("Senaste 30 alerts:", expanded_text)
+                self.assertIn("Headline 0", expanded_text)
+                self.assertEqual(0, controller._unread_count)
+                self.assertEqual(2, controller._refresh_tray.call_count)
+
+            reopened = StateStore(path)
+            try:
+                self.assertEqual(0, reopened.unread_alert_count())
+            finally:
+                reopened.close()
+
+    def test_history_with_10_alerts_has_no_expand_button(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "state.db"
+            store = StateStore(path)
+            try:
+                for number in range(10):
+                    store.record_alert(
+                        item_key=f"story-{number}",
+                        source="DTV_NEWS_FLOW",
+                        headline=f"Headline {number}",
+                        body="body",
+                        score=3,
+                        at=100.0 + number,
+                    )
+            finally:
+                store.close()
+
+            controller = TrayController.__new__(TrayController)
+            controller.config = Config()
+            controller._health = "ok"
+            controller._unread_count = 10
+            controller._refresh_tray = Mock()
+
+            with (
+                patch("trade_alert.tray.StateStore", side_effect=lambda: StateStore(path)),
+                patch("trade_alert.tray._show_text_window") as window,
+            ):
+                controller._show_alert_history(None, None)
+                self.assertEqual(0, controller._unread_count)
+                self.assertIsNone(window.call_args.kwargs["show_all_label"])
+                self.assertIsNone(window.call_args.kwargs["on_show_all"])
 
 
 if __name__ == "__main__":
