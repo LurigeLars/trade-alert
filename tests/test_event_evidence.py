@@ -189,6 +189,115 @@ class EvidenceIntakeTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 store.close()
 
+    async def test_direct_failed_image_retries_while_post_is_fresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(Path(tmp) / "state.db")
+            store.set_meta("truth_direct_initialized", "previous")
+            pid = "117111111111111188"
+            result = DirectResult((
+                DirectPost(pid, "", T0,
+                           "https://truthsocial.com/@realDonaldTrump/" + pid,
+                           media_url=IMAGE_URL),
+            ), fetched_at=T0 + 8)
+            notices = []
+            try:
+                with patch("trade_alert.truth_direct.extract_image_text",
+                           side_effect=[("", "OCR_FAILED"),
+                                        ("159 IRANIAN SHIPS Other Presidents Trump", "OCR_OK")]) as ocr:
+                    first = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 8,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(first["alerted"], 0)
+                    self.assertEqual(first["media_deferred"], 1)
+                    self.assertFalse(store.seen("TRUTH_PUBLIC:" + pid))
+
+                    waiting = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 20,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(waiting["alerted"], 0)
+                    self.assertEqual(ocr.call_count, 1)
+
+                    recovered = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 70,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(recovered["alerted"], 1)
+                    self.assertEqual(ocr.call_count, 2)
+                    self.assertTrue(store.seen("TRUTH_PUBLIC:" + pid))
+                    self.assertEqual(len(notices), 1)
+            finally:
+                store.close()
+
+    async def test_chrome_failed_image_remains_queued_until_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "inbox"
+            folder.mkdir()
+            store = StateStore(Path(tmp) / "state.db")
+            pid = "117111111111111187"
+            path = folder / ("post-" + pid + ".json")
+            row = {
+                "id": pid, "visibility": "public",
+                "created_at": datetime.fromtimestamp(
+                    T0, timezone.utc).isoformat(),
+                "account": {"id": ACCOUNT, "acct": "realDonaldTrump"},
+                "content": "",
+                "media_attachments": [{"type": "image", "url": IMAGE_URL}],
+            }
+            path.write_text(json.dumps(row))
+            notices = []
+            try:
+                with patch("trade_alert.chrome_feed.extract_image_text",
+                           side_effect=[("", "OCR_FAILED"),
+                                        ("159 IRANIAN SHIPS Other Presidents Trump", "OCR_OK")]) as ocr:
+                    first = poll_browser_feed(
+                        Config(chrome_bridge_enabled=True), store,
+                        directory=folder, at=T0 + 8,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(first["ocr_deferred"], 1)
+                    self.assertTrue(path.exists())
+                    self.assertFalse(store.seen("TRUTH_PUBLIC:" + pid))
+
+                    waiting = poll_browser_feed(
+                        Config(chrome_bridge_enabled=True), store,
+                        directory=folder, at=T0 + 20,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(waiting["ocr_deferred"], 1)
+                    self.assertEqual(ocr.call_count, 1)
+
+                    recovered = poll_browser_feed(
+                        Config(chrome_bridge_enabled=True), store,
+                        directory=folder, at=T0 + 70,
+                        notification=lambda *args: notices.append(args) or True)
+                    self.assertEqual(recovered["alerts"], 1)
+                    self.assertEqual(ocr.call_count, 2)
+                    self.assertFalse(path.exists())
+                    self.assertTrue(store.seen("TRUTH_PUBLIC:" + pid))
+                    self.assertEqual(len(notices), 1)
+            finally:
+                store.close()
+
+    async def test_direct_relevant_caption_alerts_even_if_image_ocr_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(Path(tmp) / "state.db")
+            store.set_meta("truth_direct_initialized", "previous")
+            pid = "117111111111111186"
+            result = DirectResult((
+                DirectPost(pid, "We are attacking Iran tonight.", T0,
+                           "https://truthsocial.com/@realDonaldTrump/" + pid,
+                           media_url=IMAGE_URL),
+            ), fetched_at=T0 + 8)
+            notices = []
+            try:
+                with patch("trade_alert.truth_direct.extract_image_text",
+                           return_value=("", "OCR_FAILED")):
+                    out = await read_direct_once(
+                        Config(), store, fetch=lambda: result, now=T0 + 8,
+                        notification=lambda *args: notices.append(args) or True)
+                self.assertEqual(out["alerted"], 1)
+                self.assertEqual(out["media_deferred"], 0)
+                self.assertTrue(store.seen("TRUTH_PUBLIC:" + pid))
+            finally:
+                store.close()
+
     async def test_chrome_ocr_hypothetical_is_suppressed(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "inbox"
