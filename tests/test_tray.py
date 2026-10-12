@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 from trade_alert.config import Config
 from trade_alert.state import AlertRecord, StateStore
 from trade_alert.tray import (
+    _layout_information_panes,
     format_alert_history,
     make_status_icon,
     monitoring_summary,
@@ -32,6 +33,37 @@ class TrayTests(unittest.TestCase):
 
         self.assertEqual(1, len(defaults))
         self.assertEqual("Senaste alerts", defaults[0].text)
+
+    def test_info_window_reserves_fixed_footer_below_expanding_content(self):
+        """Regression: on Windows DPI scaling the old pack layout hid every button."""
+        events = []
+
+        class Pane:
+            def __init__(self, name):
+                self.name = name
+
+            def grid(self, **kwargs):
+                events.append((self.name, "grid", kwargs))
+
+            def grid_rowconfigure(self, row, **kwargs):
+                events.append((self.name, "grid_rowconfigure", row, kwargs))
+
+            def grid_columnconfigure(self, column, **kwargs):
+                events.append((self.name, "grid_columnconfigure", column, kwargs))
+
+        outer, content, footer = Pane("outer"), Pane("text"), Pane("footer")
+        _layout_information_panes(outer, content, footer)
+
+        self.assertEqual(
+            [
+                ("outer", "grid_rowconfigure", 0, {"weight": 1}),
+                ("outer", "grid_rowconfigure", 1, {"weight": 0}),
+                ("outer", "grid_columnconfigure", 0, {"weight": 1}),
+                ("text", "grid", {"row": 0, "column": 0, "sticky": "nsew"}),
+                ("footer", "grid", {"row": 1, "column": 0, "sticky": "ew"}),
+            ],
+            events,
+        )
 
     def test_status_icons_are_runtime_generated_rgba_images(self):
         for health in ("ok", "waiting", "error", "paused"):

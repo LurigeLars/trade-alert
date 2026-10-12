@@ -265,6 +265,19 @@ def _apply_windows_titlebar_theme(root, *, dark: bool) -> None:
         logging.debug("Could not apply Windows title-bar theme", exc_info=True)
 
 
+def _layout_information_panes(outer, content, footer) -> None:
+    """Reserve a fixed bottom row before allocating expandable text area.
+
+    The old sequential pack layout could clip the footer at some Windows
+    scaling factors: the 24-line Text request consumed the entire height.
+    """
+    outer.grid_rowconfigure(0, weight=1)
+    outer.grid_rowconfigure(1, weight=0)
+    outer.grid_columnconfigure(0, weight=1)
+    content.grid(row=0, column=0, sticky="nsew")
+    footer.grid(row=1, column=0, sticky="ew")
+
+
 def _show_text_window(
     title: str,
     text: str,
@@ -306,7 +319,8 @@ def _show_text_window(
             highlightbackground=palette["border"],
             highlightthickness=1,
         )
-        text_frame.pack(fill="both", expand=True)
+        button_bar = tk.Frame(outer, bg=palette["window"], pady=10)
+        _layout_information_panes(outer, text_frame, button_bar)
 
         scrollbar = tk.Scrollbar(text_frame)
         scrollbar.pack(side="right", fill="y")
@@ -315,6 +329,7 @@ def _show_text_window(
             text_frame,
             wrap="word",
             yscrollcommand=scrollbar.set,
+            height=1,  # Let the resizable grid row decide the text area height.
             bg=palette["surface"],
             fg=palette["text"],
             insertbackground=palette["text"],
@@ -388,9 +403,6 @@ def _show_text_window(
             text_widget.yview_moveto(0.0)
 
         render_text(text)
-
-        button_bar = tk.Frame(outer, bg=palette["window"], pady=10)
-        button_bar.pack(fill="x")
 
         def select_all(_event=None):
             text_widget.tag_add("sel", "1.0", "end-1c")
