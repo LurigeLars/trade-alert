@@ -144,5 +144,59 @@ class StateTests(unittest.TestCase):
                 store.close()
 
 
+    def test_alert_history_caps_unread_and_retains_newest_thirty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            try:
+                for number in range(35):
+                    store.mark_seen(f"alert-{number}", at=100.0 + number)
+                    store.record_alert(
+                        item_key=f"alert-{number}",
+                        source="DTV_NEWS_FLOW",
+                        headline=f"Headline {number}",
+                        body="body",
+                        score=3,
+                        at=100.0 + number,
+                    )
+                self.assertEqual(30, store.unread_alert_count())
+                self.assertEqual(
+                    [f"alert-{number}" for number in range(34, 4, -1)],
+                    [row.item_key for row in store.recent_alerts(limit=50)],
+                )
+                self.assertTrue(store.seen("alert-0"))
+                store.mark_alerts_read([f"alert-{number}" for number in range(25, 35)])
+                self.assertEqual(20, store.unread_alert_count())
+            finally:
+                store.close()
+
+    def test_existing_oversized_alert_history_is_trimmed_on_open(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "state.db"
+            store = StateStore(path)
+            try:
+                store.con.executemany(
+                    """
+                    INSERT INTO alerts(item_key, created_at, source, headline, body, score)
+                    VALUES (?, ?, 'DTV_NEWS_FLOW', ?, 'body', 2)
+                    """,
+                    [(f"old-{n}", float(n + 1), f"Story {n}") for n in range(36)],
+                )
+                store.con.commit()
+            finally:
+                store.close()
+
+            reopened = StateStore(path)
+            try:
+                self.assertEqual(30, reopened.unread_alert_count())
+                self.assertEqual("old-35", reopened.recent_alerts(limit=30)[0].item_key)
+                self.assertEqual("old-6", reopened.recent_alerts(limit=30)[-1].item_key)
+                self.assertNotIn(
+                    "old-0",
+                    [a.item_key for a in reopened.recent_alerts(limit=50)],
+                )
+            finally:
+                reopened.close()
+
+
 if __name__ == "__main__":
     unittest.main()

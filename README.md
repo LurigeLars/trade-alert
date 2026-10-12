@@ -159,7 +159,7 @@ The tray menu exposes:
 - light/dark/system theme.
 - exit.
 
-Unread real alerts are stored in local SQLite. The tray icon keeps a persistent unread badge until the displayed alerts are marked read.
+Unread real alerts are stored in local SQLite. **Latest alerts** initially shows the 10 newest entries. When more than 10 are available, **Show all N** (up to 30) expands the same window and reveals the rest. Only entries actually displayed are marked as read: opening the first 10 leaves older unread alerts counted until expansion. The tray icon keeps its unread badge while unread entries remain. The SQLite alert-history table retains only the 30 newest entries, automatically discarding older alert records both on new alerts and when opening an older database; headline/source deduplication evidence is not removed by this cap.
 
 For news-latency diagnostics, Trade Alert also persists the first time a provider item is observed in DTV News Flow. **Latest alerts** shows three independent timestamps when available: provider publication time, first DTV News Flow observation, and Trade Alert registration time. If an Official TradingView item never appears in News Flow with the same provider item ID, the DTV timestamp is shown as not observed rather than inferred. For legacy alerts created before first-seen telemetry was enabled, a later replay observation is never mislabeled as the original first-seen time; DTV-sourced legacy alerts are shown as observed no later than their alert-registration time with the exact earlier time marked as unavailable. A matching `news-latency` line is also written to the local log when an alert is registered.
 
