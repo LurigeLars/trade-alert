@@ -58,6 +58,17 @@ def make_status_icon(health: Health = "waiting", unread: int = 0) -> Image.Image
     return image
 
 
+def make_window_icon() -> Image.Image:
+    """Window/taskbar branding, independent of live health and unread state.
+
+    Windows may cache the first Tk window icon under the app's stable
+    AppUserModelID; rendering transient warning/badge states in a window icon
+    would then misrepresent the status after a recovery or after reading alerts.
+    Only the system-tray icon conveys the live state.
+    """
+    return make_status_icon("ok", unread=0)
+
+
 def save_static_shortcut_icon(path: str | Path) -> Path:
     """Save the base Trade Alert tray artwork as a Windows shortcut icon.
 
@@ -676,7 +687,7 @@ class TrayController:
             "Trade Alert · Vad bevakas?",
             text,
             self.config.theme_mode,
-            make_status_icon(self._health, self._unread_count),
+            make_window_icon(),
         )
 
     def _show_alert_history(self, _icon, _item) -> None:
@@ -706,7 +717,7 @@ class TrayController:
             "Trade Alert · Senaste alerts",
             text,
             self.config.theme_mode,
-            make_status_icon(self._health, self._unread_count),
+            make_window_icon(),
             show_all_label=f"Visa alla {len(alerts)}" if len(alerts) > 10 else None,
             on_show_all=show_all if len(alerts) > 10 else None,
         )
