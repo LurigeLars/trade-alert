@@ -183,6 +183,23 @@ class TrumpMarketImpactTests(unittest.TestCase):
             with self.subTest(statement=statement):
                 self.assertEqual(classify_trump_statement(statement).priority, "IGNORE")
 
+    def test_iranian_ships_infographic_is_standard_context_not_a_new_attack(self):
+        for image_text in (
+            "159 IRANIAN SHIPS Other Presidents Trump",
+            "159 IRANIAN NAVAL VESSELS Other Presidents Trump",
+            "Iranian warships in a comparison graphic",
+        ):
+            with self.subTest(image_text=image_text):
+                self.check(image_text, "GEOPOLITICS", "STANDARD", 4)
+
+        for unrelated in (
+            "159 Iranian artists Other Presidents Trump",
+            "Iranian rugs have become popular",
+            "159 ships were photographed near a marina",
+        ):
+            with self.subTest(unrelated=unrelated):
+                self.assertEqual(classify_trump_statement(unrelated).priority, "IGNORE")
+
     def test_irrelevant_speech_and_potato_chips_are_not_alerts(self):
         for text in [
             "The crowds were wonderful tonight. Thank you all.",
