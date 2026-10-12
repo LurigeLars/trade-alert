@@ -167,7 +167,7 @@ For news-latency diagnostics, Trade Alert also persists the first time a provide
 
 The information windows support selection, `Ctrl+A`, `Ctrl+C`, **Copy all**, scrolling, system-aware light/dark mode, and Per-Monitor DPI Awareness V2 on Windows. The button toolbar (including **Show all N** and **Close**) is pinned to a non-expanding bottom row so Windows display scaling and long histories cannot push it below the window. Only the main text pane scrolls and resizes. News links in **Latest alerts** are rendered as clickable hyperlinks; TradingView-relative `/news/...` paths are resolved to `https://www.tradingview.com`, while non-HTTP(S) schemes are deliberately not made clickable.
 
-Trade Alert also sets a stable Windows AppUserModelID and reuses the current tray icon for its Tk information windows. This keeps the same Trade Alert identity/icon in the notification area, the window title bar and the Windows taskbar instead of falling back to the generic Python icon.
+Trade Alert sets a stable Windows AppUserModelID and uses a **fixed, green, badge-free application icon** for Tk information windows and the Windows taskbar. Only the live **notification-area (tray) icon** displays changing health colors or a red unread badge. Windows can cache a taskbar icon across status changes, so window/taskbar icons must not encode transient health or unread state.
 
 ## Quick start
 
