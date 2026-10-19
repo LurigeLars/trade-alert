@@ -1,124 +1,131 @@
-# Brent/Nasdaq cross-market event correlation (optional, fail closed)
+# Brent/Nasdaq cross-market evidence monitor
 
-Research motivation: 2026-10-19 at 12:38 Stockholm time, Brent crude
-fell about 0.59% in one minute while the Nasdaq-100 future gained about
-0.20%. The historical research rule used **Brent <= -0.50%** and
-**NQ >= +0.15%** for the **same completed minute**, with a 30-minute
-deduplication interval. Neither a causal mechanism nor an investable
-edge was demonstrated. This is an **evidence-gathering notifier**, not
-an executable trading strategy.
+## Purpose
 
-## Current status: producer NOT connected
+The October 19, 2026 12:38 Stockholm shock showed Brent down
+~0.59% and Nasdaq-100 futures up ~0.20% in one minute. The
+historical event study found no independent investable edge.
 
-The Trade Alert app already obtains news from DTV News Flow and its
-existing Official TradingView fallback. It **does not currently provide
-a verified two-symbol, one-minute, live price stream**. This feature is
-disabled by default. Do not claim it is active just because the code is
-deployed. The local market-data producer must be independently
-implemented, validated and explicitly enabled before production.
+This monitor registers similar shocks and checks for the **earliest
+eligible timestamped pre-event publication seen by our feeds**.
+It does not assert causality, generate trades or place orders.
 
-The existing price/news ingestion architecture must supply synchronous
-**realtime, completed 1-minute candles** from an explicitly verified
-Brent futures contract and Nasdaq-100 future. No delayed quotes,
-synthetic spot CFD substituted for Brent futures, missing minute, or
-unverified contract rolls are permitted.
+**Trigger:** same completed 1-minute bar, Brent <= -0.50% and
+Nasdaq-100 >= +0.15%. Treat signals <30 minutes apart as one cluster.
 
-## Local handoff contract
+## Live source: resident DTV workers (connected 2026-10-19)
 
-Configure the application's local `config.json` (never Git):
+Two resident one-minute DTV workers are configured:
+
+| Handle | Exact symbol | Resolution |
+| --- | --- | --- |
+| `cross-brent-dec26-1m` | `NYMEX:BZZ2026` | 1 minute |
+| `cross-nasdaq-1m` | `CME_MINI:NQ1!` | 1 minute |
+
+Both were provisioned on a dedicated DTV worker-owned layout without
+changing the user's main TradingView chart. Observed 2026-10-19
+snapshots reported verified futures references, realtime status and
+`is_delay=false`, with timestamps for the bar-start convention.
+
+Trade Alert calls DTV `realtime_snapshot` read-only every 10 seconds,
+using exact worker handles and bounded 1m OHLCV history. It requires
+both series to be fresh, source entitlement realtime, no quote delay,
+`current_bar.time` current, exact exchange/contract, and consecutive
+1m closes **strictly older than the current uncompleted candle**.
+The event's `bar_end` is `bar_start+60s`, not its chart label
+time. The collector waits for the **slower** of the two legs and can
+match recent completed bars within a bounded 180s source window.
+
+A DTV timeout, missing worker, symbol or timeframe mismatch, stale
+quote, delayed provider entitlement or disconnected session fails
+closed. Trade Alert shows **Degraded** for the Brent/Nasdaq source
+rather than reporting a healthy monitor.
+
+DTV's explicit symbol verification is required. `TVC:UKOIL`,
+`ICEEUR:BRN1!`, Yahoo continuous-futures prices, or stock ETFs
+cannot silently replace the selected December 2026 Brent contract.
+
+### Activation and configuration
+
+The monitor is disabled by default on an arbitrary fresh install.
+At startup it checks DTV's `worker_status` for the **exact two
+already assigned** worker handles/symbols/timeframes above. When both
+match, it sets `market_correlation_enabled=true` in the local
+Trade Alert `config.json`. It does not enable on an unprovisioned
+installation and does not switch any DTV charts.
+
+To explicitly opt out, set:
+
+```json
+{"market_correlation_enabled": false,
+ "market_correlation_auto_enable_resident": false}
+```
+
+For manual enabling only when both exact workers exist:
 
 ```json
 {
   "market_correlation_enabled": true,
+  "market_correlation_authorized_sources": ["DTV_RESIDENT"],
   "market_correlation_brent_symbol": "NYMEX:BZZ2026",
   "market_correlation_nasdaq_symbol": "CME_MINI:NQ1!",
-  "market_correlation_authorized_sources": ["TRADE_SPINE_LOCAL"]
+  "market_correlation_poll_seconds": 10
 }
 ```
 
-The symbols above are **illustrative as of 19 October 2026**, not
-evergreen instrument identifiers. The source must validate exactly which
-underlying and futures month it supplies. Explicitly change the local
-configuration at contract roll. Do not silently substitute CFD prices.
+The configured Brent December contract will expire. A separate,
+**explicitly validated** rollover is required before the expiry;
+do not auto-substitute any spot CFD or a different future.
 
-The authenticated/approved local producer writes a JSON file **atomically**
-(temp file + rename) to
-`%LOCALAPPDATA%/TradeAlert/cross-market-inbox/*.json`:
+## News correlation and historical evidence
 
-```json
-{
-  "event_id": "2026-10-19T10:38:00Z-Brent-NQ",
-  "provider": "TRADE_SPINE_LOCAL",
-  "bar_seconds": 60,
-  "realtime": true,
-  "delayed": false,
-  "brent": {
-    "symbol": "NYMEX:BZZ2026",
-    "bar_end": "2026-10-19T10:39:00Z",
-    "previous_close": 108.73,
-    "close": 108.09
-  },
-  "nasdaq": {
-    "symbol": "CME_MINI:NQ1!",
-    "bar_end": "2026-10-19T10:39:00Z",
-    "previous_close": 29688.25,
-    "close": 29746.75
-  }
-}
-```
+No additional news provider is contacted. Trade Alert reuses its
+existing DTV News Flow (primary) and Official TradingView (fallback)
+feeds. It caches bounded publication records and keeps separate:
 
-One-minute chart bars are commonly labeled by their **opening minute**.
-The candle labeled 10:38 UTC finishes at **10:39 UTC**, so the contract
-requires its completed **bar_end** (10:39), not its opening timestamp.
-Publishing that minute's close at 10:38 would introduce look-ahead bias.
+- original provider/source item identity
+- timestamp `published` (claim by publisher)
+- `first_seen` by this local Trade Alert intake
+- market bar's completed `bar_end` and local detection time
+- the evidence label and every later change
 
-**Historical sample only; do not replay it into an active inbox.**
-Both exact source symbols, timestamps, prior completed closes and
-current completed closes are mandatory. The event must arrive within
-`market_correlation_max_age_seconds` (180s by default), never in the
-future, and must be explicitly realtime. Source allowlisting plus
-localhost/NTFS access control are required: source ID *alone* is not
-authentication. An untrusted file writer could claim to be an
-allowlisted producer, so only use an access-controlled directory on
-the user's machine.
+Candidates must have an HTTPS URL, named wire provider, oil/policy
+topic relevance, and published timestamp within 30 minutes **BEFORE**
+the completed shock. The selected match is the **earliest eligible
+published story in the captured bounded feed**, not globally first.
+A source report first seen after the shock is explicitly labeled
+`PRE_EVENT_PUBLICATION_DISCOVERED_LATE`; older reports in a
+backfill never become proof of causality. News first published
+*after* the shock cannot be labeled the prior trigger.
 
-## Classification
+If no eligible story is observed, the event states
+`NO_VERIFIED_PRE_EVENT_HEADLINE` / `Orsak OKÄND` and source
+coverage remains a separate health dimension. Rechecked incidents
+can be updated for 90 minutes as delayed articles arrive; updates
+are journaled without overwriting the original evidence. A first
+material unknown -> plausible pre-event publication may create a
+separate update toast (deduplicated).
 
-The market event is stored in the app's existing bounded local alert
-history (30 newest alerts); durable thesis/evaluation records remain
-Trade Spine's responsibility.
+Incidents and their revision log are stored as operational data in
+the local Trade Alert SQLite database, retained for 30 days; news
+cache is bounded to three hours. Portfolio positions, investments,
+orders and thesis decisions are **not** stored in this database.
+Cross-system promotion of these research records into canonical
+Trade Spine intelligence remains a separate optional integration;
+do not claim it is already implemented.
 
-On ingestion, the app examines the **headlines present in the current
-DTV/Official fetch**. It retains only materially oil-relevant headlines
-from a short list of named wire providers with a valid HTTPS URL and a
-verified published timestamp in the 30 minutes **before** the market
-shock. The first of those by timestamp is labeled
-`TIMESTAMP_MATCH_ONLY`. This means **the earliest eligible published
-headline observed in the supplied bounded news snapshot**, *not* the
-global first publication or a verified cause.
-
-If none is found, the alert explicitly says `Orsak OKÄND`.
-Reports published after the shock cannot be causal triggers. News
-source degradation must remain visible independently of this feature.
-The market shock alert is distinct from ordinary oil-news alerts, so
-no previously registered market alert is sent again.
-
-Follow-up enhancement (not activated here): have Trade Spine store a
-canonical incident record and re-run the linkage when late/backfilled
-news arrives, preserving `published_at`, `first_seen_at`, original
-provider ID and revisions. This first iteration matches the headlines
-actually supplied on the shock cycle; it does **not** claim exhaustive
-historical backfill matching.
-
-## Acceptance tests
+## Tests
 
 ```powershell
-python -m unittest tests.test_market_correlation -v
-python -m unittest discover -s tests -p 'test_*.py'
+python -m unittest tests.test_market_correlation tests.test_market_price tests.test_market_evidence -v
+python -m unittest discover -s tests -p 'test_*.py' -q
 ```
 
-Required deployment gates: authorized producer, realtime entitlement,
-correct reference mapping, clock synchronization, no time-gap filling,
-news-source health, dedupe under rapid repeats, no order routing,
-verified Windows toast behavior, and a manually triggered synthetic
-test **without** production notification.
+Integration acceptance includes checking the actual DTV worker registry
+and live data status, a non-notifying sample event, 30-minute
+deduplication, late news backfill, no last-minute lookahead, no
+unverified/delayed symbols, Windows toast functionality and safe
+restart after Git fast-forward. A successful GitHub CI run alone
+is **not** evidence of Windows tray deployment.
+
+No trade execution or automatic directional signal is implemented.
