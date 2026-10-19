@@ -15,7 +15,9 @@ from .truth_direct import DirectUnavailable, fetch_public_statuses, read_direct_
 from .chrome_feed import poll_browser_feed
 from .chrome_receiver import start_chrome_receiver
 from .mcp_client import MCPToolError
-from .market_correlation import process_market_incidents
+from .market_correlation import MarketCorrelationError, process_market_incidents
+from .market_price import collect_resident_events
+from .market_evidence import cache_headlines, cached_headlines, reconcile_incidents
 from .news import (
     DTVWatchlistContext,
     Headline,
@@ -235,13 +237,17 @@ async def run_once(
         store.mark_seen(item.key, at=now)
         store.mark_seen_item(item.dedupe_key, at=now)
 
-    market_shock = {"accepted": 0, "notified": 0, "rejected": 0, "suppressed": 0}
-    try:
-        market_shock = process_market_incidents(
-            config, store, items, now=now, alert_callback=alert_callback
-        )
-    except Exception:
-        logging.exception("cross-market evidence correlation failed")
+    # Market-data collection runs independently from the news path;
+    # news source outages must never block price detection.
+    market_evidence = {"cached": 0, "updated": 0, "notified": 0}
+    if config.market_correlation_enabled:
+        try:
+            market_evidence["cached"] = cache_headlines(store, items, now=now)
+            updates = reconcile_incidents(store, now=now, alert_callback=alert_callback)
+            market_evidence["updated"] = updates["updated"]
+            market_evidence["notified"] = updates["notified"]
+        except Exception:
+            logging.exception("cross-market news revision failed")
 
     if dtv_ok:
         store.set_meta("dtv_last_success", datetime.now(timezone.utc).isoformat())
@@ -267,7 +273,7 @@ async def run_once(
         "dtv_ok": dtv_ok,
         "dtv_fetched": dtv_fetched,
         "official_ok": official_ok,
-        "market_shock": market_shock,
+        "market_evidence": market_evidence,
     }
 
 
@@ -319,11 +325,23 @@ async def _run_news_loop(
 
             if status_callback is not None:
                 if config.market_correlation_enabled:
-                    # Empty inbox is not evidence of a running upstream producer.
-                    status_callback(
-                        "Nyheter aktiva · marknadspriskälla ej hälsokontrollerad",
-                        "waiting",
-                    )
+                    ok_since = store.get_meta("cross_market_price_last_ok")
+                    healthy = False
+                    if ok_since is not None:
+                        try:
+                            healthy = (time.time() - float(ok_since)
+                                       <= max(45, 3 * config.market_correlation_poll_seconds)
+                                       and store.get_meta("cross_market_price_status") == "ACTIVE")
+                        except ValueError:
+                            pass
+                    if not healthy:
+                        status_callback("Degraderad · Brent/Nasdaq prisdata saknas", "waiting")
+                    elif not (result["dtv_ok"] or last_official_ok):
+                        status_callback("Degraderad · marknadsnyheter saknas", "waiting")
+                    elif result["dtv_ok"] and last_official_ok:
+                        status_callback("Aktiv · Brent/Nasdaq + nyheter", "ok")
+                    else:
+                        status_callback("Aktiv · Brent/Nasdaq / nyhetsfallback", "ok")
                 elif result["dtv_ok"] and last_official_ok:
                     status_callback("Aktiv · News Flow primär + Official TV", "ok")
                 elif result["dtv_ok"]:
@@ -342,6 +360,38 @@ async def _run_news_loop(
         if include_official:
             next_official = time.monotonic() + config.official_poll_seconds
         await _sleep_interruptible(config.poll_seconds, stop_event)
+
+
+async def _run_market_correlation_loop(
+    config: Config, store: StateStore, *, stop_event=None,
+    pause_event=None, alert_callback=None,
+) -> None:
+    """Independent ten-second DTV resident 1m detector.
+
+    Do not wait for the broad news collector, which can backfill late.
+    Enforce fail-closed freshness and visible source health.
+    """
+    while stop_event is None or not stop_event.is_set():
+        if pause_event is not None and pause_event.is_set():
+            await _sleep_interruptible(0.5, stop_event)
+            continue
+        try:
+            events = await collect_resident_events(config)
+            if events:
+                matches = process_market_incidents(
+                    config, store, cached_headlines(store),
+                    records=events, alert_callback=alert_callback,
+                )
+                if matches["accepted"] or matches["rejected"]:
+                    logging.info("cross-market minute shocks: %s", matches)
+            store.set_meta("cross_market_price_last_ok", str(time.time()))
+            store.set_meta("cross_market_price_status", "ACTIVE")
+            store.set_meta("cross_market_price_last_error", "")
+        except (MarketCorrelationError, Exception) as exc:
+            store.set_meta("cross_market_price_status", "DEGRADED")
+            store.set_meta("cross_market_price_last_error", str(exc)[:240])
+            logging.warning("Brent/Nasdaq realtime coverage degraded: %s", exc)
+        await _sleep_interruptible(config.market_correlation_poll_seconds, stop_event)
 
 
 async def _run_breaking_loop(
@@ -464,13 +514,21 @@ async def run_loop(
     alert_callback=None,
 ) -> None:
     if not (config.breaking_inbox_enabled or config.truth_rss_enabled
-            or config.truth_direct_enabled or config.chrome_bridge_enabled):
+            or config.truth_direct_enabled or config.chrome_bridge_enabled
+            or config.market_correlation_enabled):
         await _run_news_loop(
             config, store, stop_event=stop_event, pause_event=pause_event,
             status_callback=status_callback, alert_callback=alert_callback,
         )
         return
     workers = []
+    if config.market_correlation_enabled:
+        workers.append(asyncio.create_task(
+            _run_market_correlation_loop(
+                config, store, stop_event=stop_event, pause_event=pause_event,
+                alert_callback=alert_callback,
+            )
+        ))
     if config.breaking_inbox_enabled:
         workers.append(asyncio.create_task(
             _run_breaking_loop(
