@@ -170,6 +170,7 @@ def process_market_incidents(
     headlines: Iterable[Headline],
     *,
     directory: Path | None = None,
+    records: Iterable[dict] | None = None,
     now: float | None = None,
     notification=None,
     alert_callback=None,
@@ -186,17 +187,22 @@ def process_market_incidents(
         logging.error("Cross-market correlation enabled without an authorized price producer")
         result["rejected"] += 1
         return result
-    folder = directory or incident_inbox_path()
-    folder.mkdir(parents=True, exist_ok=True)
     moment = time.time() if now is None else float(now)
     news = tuple(headlines)
-    for path in sorted(folder.glob("*.json"))[:MAX_EVENTS_PER_CYCLE]:
+    if records is None:
+        folder = directory or incident_inbox_path()
+        folder.mkdir(parents=True, exist_ok=True)
+        candidates = [(p, None) for p in sorted(folder.glob("*.json"))[:MAX_EVENTS_PER_CYCLE]]
+    else:
+        # Internal, validated DTV snapshots are passed directly (no filesystem ingress).
+        candidates = [(None, record) for record in list(records)[:MAX_EVENTS_PER_CYCLE]]
+    for path, payload in candidates:
         try:
-            if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_EVENT_BYTES:
-                raise MarketCorrelationError("invalid/oversized event file")
-            event = parse_market_shock(
-                json.loads(path.read_text(encoding="utf-8")), config, now=moment
-            )
+            if path is not None:
+                if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_EVENT_BYTES:
+                    raise MarketCorrelationError("invalid/oversized event file")
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            event = parse_market_shock(payload, config, now=moment)
             if store.seen(event.key):
                 result["suppressed"] += 1
                 continue
@@ -261,10 +267,11 @@ def process_market_incidents(
                 logging.warning("Cross-market shock saved; toast delivery failed")
         except (MarketCorrelationError, ValueError, OSError, UnicodeError, TypeError) as exc:
             result["rejected"] += 1
-            logging.warning("Rejected cross-market event %s: %s", path.name, exc)
+            logging.warning("Rejected cross-market event %s: %s", path.name if path else "resident", exc)
         finally:
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                logging.exception("Cannot remove consumed cross-market file %s", path)
+            if path is not None:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    logging.exception("Cannot remove consumed cross-market file %s", path)
     return result
