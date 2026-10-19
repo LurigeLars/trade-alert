@@ -54,18 +54,23 @@ The authenticated/approved local producer writes a JSON file **atomically**
   "delayed": false,
   "brent": {
     "symbol": "NYMEX:BZZ2026",
-    "bar_end": "2026-10-19T10:38:00Z",
+    "bar_end": "2026-10-19T10:39:00Z",
     "previous_close": 108.73,
     "close": 108.09
   },
   "nasdaq": {
     "symbol": "CME_MINI:NQ1!",
-    "bar_end": "2026-10-19T10:38:00Z",
+    "bar_end": "2026-10-19T10:39:00Z",
     "previous_close": 29688.25,
     "close": 29746.75
   }
 }
 ```
+
+One-minute chart bars are commonly labeled by their **opening minute**.
+The candle labeled 10:38 UTC finishes at **10:39 UTC**, so the contract
+requires its completed **bar_end** (10:39), not its opening timestamp.
+Publishing that minute's close at 10:38 would introduce look-ahead bias.
 
 **Historical sample only; do not replay it into an active inbox.**
 Both exact source symbols, timestamps, prior completed closes and
