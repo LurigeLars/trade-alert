@@ -89,13 +89,15 @@ class MarketPriceTests(unittest.TestCase):
         missing = snapshot()
         missing["missing"] = ["NYMEX:BZZ2026"]
         failures.append(missing)
-        gapped = snapshot()
-        gapped["snapshots"][0]["recent_bars"][0]["time"] -= 60
-        failures.append(gapped)
         for v in failures:
             with self.subTest(scenario=failures.index(v)):
                 with self.assertRaises(MarketCorrelationError):
                     parse_resident_snapshot(v, config(), now=T + 15)
+
+    def test_missing_minute_never_emits_signal(self):
+        gapped = snapshot()
+        gapped["snapshots"][0]["recent_bars"][0]["time"] -= 60
+        self.assertEqual([], parse_resident_snapshot(gapped, config(), now=T + 15))
 
     def test_refuses_stale_completed_minute(self):
         with self.assertRaises(MarketCorrelationError):
