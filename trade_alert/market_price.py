@@ -132,6 +132,52 @@ def parse_resident_snapshot(payload: object, config: Config, *, now: float | Non
     return results
 
 
+
+async def activate_if_resident(config: Config) -> bool:
+    """One-time opt-in when this very specific, verified worker pair exists.
+
+    Other Trade Alert installations stay disabled; no chart switching.
+    Set market_correlation_auto_enable_resident=False to opt out.
+    """
+    if config.market_correlation_enabled:
+        return True
+    if (not config.market_correlation_auto_enable_resident
+            or SOURCE_ID not in config.market_correlation_authorized_sources):
+        return False
+    try:
+        payload = await call_json_tool(config.dtv_url, "worker_status", {})
+        if not isinstance(payload, dict):
+            return False
+        if isinstance(payload.get("result"), dict):
+            payload = payload["result"]
+        if payload.get("success") is not True:
+            return False
+        entries = payload.get("entries")
+        if not isinstance(entries, list):
+            return False
+        refs = {
+            "cross-brent-dec26-1m": config.market_correlation_brent_symbol,
+            "cross-nasdaq-1m": config.market_correlation_nasdaq_symbol,
+        }
+        for handle, symbol in refs.items():
+            candidates = [entry for entry in entries
+                          if isinstance(entry, dict) and entry.get("handle") == handle]
+            if len(candidates) != 1:
+                return False
+            entry = candidates[0]
+            assignment = entry.get("assignment")
+            if (entry.get("symbol") != symbol or str(entry.get("timeframe")) != "1"
+                    or not isinstance(assignment, dict)
+                    or assignment.get("resolved_symbol") != symbol
+                    or str(assignment.get("resolution")) != "1"):
+                return False
+        config.market_correlation_enabled = True
+        config.save()
+        return True
+    except (MCPToolError, OSError, ValueError):
+        return False
+
+
 async def collect_resident_events(config: Config) -> list[dict]:
     if not config.market_correlation_enabled:
         return []
