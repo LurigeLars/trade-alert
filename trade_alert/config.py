@@ -54,6 +54,7 @@ class Config:
     market_correlation_authorized_sources: tuple[str, ...] = ("DTV_RESIDENT",)
     market_correlation_max_age_seconds: int = 180
     market_correlation_poll_seconds: float = 10.0
+    market_correlation_auto_enable_resident: bool = True
 
     @classmethod
     def load(cls, path: Path | None = None) -> "Config":
@@ -142,6 +143,8 @@ class Config:
             raise ValueError("chrome_bridge_max_age_seconds must be 30-1800")
         if not 5.0 <= float(self.market_correlation_poll_seconds) <= 60.0:
             raise ValueError("market_correlation_poll_seconds must be 5-60")
+        if not isinstance(self.market_correlation_auto_enable_resident, bool):
+            raise ValueError("market_correlation_auto_enable_resident must be boolean")
         if not isinstance(self.market_correlation_enabled, bool):
             raise ValueError("market_correlation_enabled must be boolean")
         if not 60 <= int(self.market_correlation_max_age_seconds) <= 900:
