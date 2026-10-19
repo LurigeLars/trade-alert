@@ -51,8 +51,9 @@ class Config:
     market_correlation_enabled: bool = False
     market_correlation_brent_symbol: str = "NYMEX:BZZ2026"
     market_correlation_nasdaq_symbol: str = "CME_MINI:NQ1!"
-    market_correlation_authorized_sources: tuple[str, ...] = ()
+    market_correlation_authorized_sources: tuple[str, ...] = ("DTV_RESIDENT",)
     market_correlation_max_age_seconds: int = 180
+    market_correlation_poll_seconds: float = 10.0
 
     @classmethod
     def load(cls, path: Path | None = None) -> "Config":
@@ -139,6 +140,8 @@ class Config:
             raise ValueError("chrome_bridge_poll_seconds must be 0.2-30")
         if not 30 <= int(self.chrome_bridge_max_age_seconds) <= 1800:
             raise ValueError("chrome_bridge_max_age_seconds must be 30-1800")
+        if not 5.0 <= float(self.market_correlation_poll_seconds) <= 60.0:
+            raise ValueError("market_correlation_poll_seconds must be 5-60")
         if not isinstance(self.market_correlation_enabled, bool):
             raise ValueError("market_correlation_enabled must be boolean")
         if not 60 <= int(self.market_correlation_max_age_seconds) <= 900:
