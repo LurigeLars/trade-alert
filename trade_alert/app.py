@@ -16,7 +16,7 @@ from .chrome_feed import poll_browser_feed
 from .chrome_receiver import start_chrome_receiver
 from .mcp_client import MCPToolError
 from .market_correlation import MarketCorrelationError, process_market_incidents
-from .market_price import collect_resident_events
+from .market_price import activate_if_resident, collect_resident_events
 from .market_evidence import cache_headlines, cached_headlines, reconcile_incidents
 from .news import (
     DTVWatchlistContext,
@@ -387,7 +387,7 @@ async def _run_market_correlation_loop(
             store.set_meta("cross_market_price_last_ok", str(time.time()))
             store.set_meta("cross_market_price_status", "ACTIVE")
             store.set_meta("cross_market_price_last_error", "")
-        except (MarketCorrelationError, Exception) as exc:
+        except Exception as exc:
             store.set_meta("cross_market_price_status", "DEGRADED")
             store.set_meta("cross_market_price_last_error", str(exc)[:240])
             logging.warning("Brent/Nasdaq realtime coverage degraded: %s", exc)
@@ -513,6 +513,7 @@ async def run_loop(
     status_callback=None,
     alert_callback=None,
 ) -> None:
+    await activate_if_resident(config)
     if not (config.breaking_inbox_enabled or config.truth_rss_enabled
             or config.truth_direct_enabled or config.chrome_bridge_enabled
             or config.market_correlation_enabled):
