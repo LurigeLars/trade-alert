@@ -394,6 +394,29 @@ async def _run_market_correlation_loop(
         await _sleep_interruptible(config.market_correlation_poll_seconds, stop_event)
 
 
+async def _run_market_activation_loop(
+    config: Config, store: StateStore, *, stop_event=None,
+    pause_event=None, alert_callback=None,
+) -> None:
+    """Background-only worker autodetection; never hold up existing alerts."""
+    while stop_event is None or not stop_event.is_set():
+        if pause_event is not None and pause_event.is_set():
+            await _sleep_interruptible(0.5, stop_event)
+            continue
+        try:
+            if await activate_if_resident(config):
+                await _run_market_correlation_loop(
+                    config, store, stop_event=stop_event,
+                    pause_event=pause_event, alert_callback=alert_callback,
+                )
+                return
+        except Exception:
+            logging.exception("cross-market worker autodetection failed")
+        # DTV may come online after Windows startup; retry without touching
+        # any ordinary oil/news/policy intake work.
+        await _sleep_interruptible(120.0, stop_event)
+
+
 async def _run_breaking_loop(
     config: Config,
     store: StateStore,
@@ -513,19 +536,19 @@ async def run_loop(
     status_callback=None,
     alert_callback=None,
 ) -> None:
-    await activate_if_resident(config)
     if not (config.breaking_inbox_enabled or config.truth_rss_enabled
             or config.truth_direct_enabled or config.chrome_bridge_enabled
-            or config.market_correlation_enabled):
+            or config.market_correlation_enabled
+            or config.market_correlation_auto_enable_resident):
         await _run_news_loop(
             config, store, stop_event=stop_event, pause_event=pause_event,
             status_callback=status_callback, alert_callback=alert_callback,
         )
         return
     workers = []
-    if config.market_correlation_enabled:
+    if config.market_correlation_enabled or config.market_correlation_auto_enable_resident:
         workers.append(asyncio.create_task(
-            _run_market_correlation_loop(
+            _run_market_activation_loop(
                 config, store, stop_event=stop_event, pause_event=pause_event,
                 alert_callback=alert_callback,
             )
