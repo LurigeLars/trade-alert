@@ -106,18 +106,31 @@ Trade Alert
 
 Keeping this in a separate repository also isolates desktop UI, Windows lifecycle and notification failures from Trade Spine's durable portfolio/thesis state.
 
-## Optional Brent/Nasdaq event evidence
+## Brent/Nasdaq completed-minute shock evidence
 
-A **disabled-by-default** cross-market event gate matches a verified
-one-minute Brent fall (at least 0.50%) with a Nasdaq-100 future rise
-(at least 0.15%) and links the event to an eligible primary-wire headline
-in the existing news feed when its publication precedes the price event.
-A timestamp match is **not** proof that the headline caused the movement.
-Unmatched events are labeled `Orsak OKÄND`; no orders are ever placed.
+The existing Trade Alert process contains an independent read-only
+10-second poller for **preprovisioned DTV resident 1-minute futures**.
+It detects **Brent December 2026 <= -0.50% / Nasdaq-100 future >= +0.15%**
+during the same **completed** 1-minute candle, with a 30-minute
+cluster cooldown. Exact verified futures symbols, realtime entitlement,
+source freshness and contiguous minute bars are mandatory.
 
-**The authenticated live price producer is not connected.** Installing
-this code does not activate market-shock monitoring. See the
-[producer contract, safeguards and activation prerequisites](docs/brent-nasdaq-event-correlation.md).
+The feature defaults to **off for other installations**. If DTV's
+worker registry already contains the specifically provisioned pair
+`cross-brent-dec26-1m` and `cross-nasdaq-1m`, Trade Alert
+automatically enables it on the next app startup, saving that setting
+locally. Set `market_correlation_auto_enable_resident=false` to opt out.
+No visible TradingView chart switching, broker connection, or order routing.
+
+The existing DTV/Official news collector remains the news source; there
+is no duplicate crawler. Pre-event publications can be correlated with
+the market shock but **timestamp association is not causation**.
+A locally retained 30-day operational incident audit records news
+`published`, first observation, and later/backfilled revisions.
+When source data is incomplete the status is degraded, not healthy.
+No automatic buy/sell recommendations are generated.
+
+See [operational contract, source health and limitations](docs/brent-nasdaq-event-correlation.md).
 
 ## News routing
 
