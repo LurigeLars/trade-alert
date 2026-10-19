@@ -7,6 +7,7 @@ from trade_alert.market_correlation import MarketCorrelationError
 from trade_alert.market_price import (
     parse_resident_snapshot,
     collect_resident_events,
+    activate_if_resident,
 )
 
 
@@ -111,6 +112,47 @@ class MarketPriceTests(unittest.TestCase):
 
 
 class MarketPriceAsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_autoconfig_requires_exact_preexisting_worker_assignments(self):
+        cfg = config()
+        cfg.market_correlation_enabled = False
+        workers = {
+            "success": True,
+            "entries": [
+                {
+                    "handle": "cross-brent-dec26-1m",
+                    "symbol": "NYMEX:BZZ2026",
+                    "timeframe": "1",
+                    "assignment": {
+                        "resolved_symbol": "NYMEX:BZZ2026",
+                        "resolution": "1",
+                    },
+                },
+                {
+                    "handle": "cross-nasdaq-1m",
+                    "symbol": "CME_MINI:NQ1!",
+                    "timeframe": "1",
+                    "assignment": {
+                        "resolved_symbol": "CME_MINI:NQ1!",
+                        "resolution": "1",
+                    },
+                },
+            ],
+        }
+        with patch("trade_alert.market_price.call_json_tool",
+                   new=AsyncMock(return_value=workers)), (
+                patch("trade_alert.config.Config.save") as write):
+            self.assertTrue(await activate_if_resident(cfg))
+            write.assert_called_once()
+        self.assertTrue(cfg.market_correlation_enabled)
+
+        cfg.market_correlation_enabled = False
+        workers["entries"][0]["assignment"]["resolved_symbol"] = "TVC:UKOIL"
+        with patch("trade_alert.market_price.call_json_tool",
+                   new=AsyncMock(return_value=workers)), (
+                patch("trade_alert.config.Config.save") as write):
+            self.assertFalse(await activate_if_resident(cfg))
+            write.assert_not_called()
+
     async def test_calls_existing_dtv_resident_no_chart_switch(self):
         with patch(
             "trade_alert.market_price.call_json_tool",
