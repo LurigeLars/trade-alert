@@ -106,6 +106,19 @@ Trade Alert
 
 Keeping this in a separate repository also isolates desktop UI, Windows lifecycle and notification failures from Trade Spine's durable portfolio/thesis state.
 
+## Optional Brent/Nasdaq event evidence
+
+A **disabled-by-default** cross-market event gate matches a verified
+one-minute Brent fall (at least 0.50%) with a Nasdaq-100 future rise
+(at least 0.15%) and links the event to an eligible primary-wire headline
+in the existing news feed when its publication precedes the price event.
+A timestamp match is **not** proof that the headline caused the movement.
+Unmatched events are labeled `Orsak OKÄND`; no orders are ever placed.
+
+**The authenticated live price producer is not connected.** Installing
+this code does not activate market-shock monitoring. See the
+[producer contract, safeguards and activation prerequisites](docs/brent-nasdaq-event-correlation.md).
+
 ## News routing
 
 The default example profile is a generic **Oil / Brent** context.
