@@ -15,6 +15,7 @@ from .truth_direct import DirectUnavailable, fetch_public_statuses, read_direct_
 from .chrome_feed import poll_browser_feed
 from .chrome_receiver import start_chrome_receiver
 from .mcp_client import MCPToolError
+from .market_correlation import process_market_incidents
 from .news import (
     DTVWatchlistContext,
     Headline,
@@ -234,6 +235,14 @@ async def run_once(
         store.mark_seen(item.key, at=now)
         store.mark_seen_item(item.dedupe_key, at=now)
 
+    market_shock = {"accepted": 0, "notified": 0, "rejected": 0, "suppressed": 0}
+    try:
+        market_shock = process_market_incidents(
+            config, store, items, now=now, alert_callback=alert_callback
+        )
+    except Exception:
+        logging.exception("cross-market evidence correlation failed")
+
     if dtv_ok:
         store.set_meta("dtv_last_success", datetime.now(timezone.utc).isoformat())
     if dtv_fetched and dtv_first_cycle:
@@ -258,6 +267,7 @@ async def run_once(
         "dtv_ok": dtv_ok,
         "dtv_fetched": dtv_fetched,
         "official_ok": official_ok,
+        "market_shock": market_shock,
     }
 
 
@@ -308,7 +318,13 @@ async def _run_news_loop(
             )
 
             if status_callback is not None:
-                if result["dtv_ok"] and last_official_ok:
+                if config.market_correlation_enabled:
+                    # Empty inbox is not evidence of a running upstream producer.
+                    status_callback(
+                        "Nyheter aktiva · marknadspriskälla ej hälsokontrollerad",
+                        "waiting",
+                    )
+                elif result["dtv_ok"] and last_official_ok:
                     status_callback("Aktiv · News Flow primär + Official TV", "ok")
                 elif result["dtv_ok"]:
                     status_callback("Aktiv · News Flow primär", "ok")
