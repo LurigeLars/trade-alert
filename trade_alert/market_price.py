@@ -63,6 +63,8 @@ def _verified_bars(snap: dict, expected_symbol: str, *, now: float) -> dict[int,
                 and not isinstance(c, bool) and math.isfinite(c) and c > 0
                 and int(t) == t and t < active_t and int(t) % 60 == 0):
             complete[int(t)] = float(c)
+    if active_t - 60 not in complete or active_t - 120 not in complete:
+        raise MarketCorrelationError("last two completed 1m candles not contiguous")
     return complete
 
 
