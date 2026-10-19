@@ -250,6 +250,8 @@ def process_market_incidents(
             if not saved:
                 result["suppressed"] += 1
                 continue
+            from .market_evidence import record_incident
+            record_incident(store, event, evidence, now=moment)
             store.set_meta("cross_market_last_event_at", str(event.bar_end))
             result["accepted"] += 1
             if alert_callback:
