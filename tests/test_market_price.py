@@ -138,18 +138,22 @@ class MarketPriceAsyncTests(unittest.IsolatedAsyncioTestCase):
                 },
             ],
         }
-        with patch("trade_alert.market_price.call_json_tool",
-                   new=AsyncMock(return_value=workers)), (
-                patch("trade_alert.config.Config.save") as write):
+        with (
+            patch("trade_alert.market_price.call_json_tool",
+                  new=AsyncMock(return_value=workers)),
+            patch("trade_alert.config.Config.save") as write,
+        ):
             self.assertTrue(await activate_if_resident(cfg))
             write.assert_called_once()
         self.assertTrue(cfg.market_correlation_enabled)
 
         cfg.market_correlation_enabled = False
         workers["entries"][0]["assignment"]["resolved_symbol"] = "TVC:UKOIL"
-        with patch("trade_alert.market_price.call_json_tool",
-                   new=AsyncMock(return_value=workers)), (
-                patch("trade_alert.config.Config.save") as write):
+        with (
+            patch("trade_alert.market_price.call_json_tool",
+                  new=AsyncMock(return_value=workers)),
+            patch("trade_alert.config.Config.save") as write,
+        ):
             self.assertFalse(await activate_if_resident(cfg))
             write.assert_not_called()
 
