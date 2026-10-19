@@ -27,6 +27,7 @@ SOURCE_RE = re.compile(r"^[A-Z][A-Z0-9_]{2,79}$")
 EVENT_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 PRIMARY_PROVIDERS = frozenset({
     "reuters", "dow jones newswires", "bloomberg", "associated press",
+    "trading economics",
 })
 MAX_NEWS_LOOKBACK_SECONDS = 1800
 MIN_SEPARATION_SECONDS = 1800
