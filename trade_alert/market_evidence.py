@@ -11,7 +11,6 @@ import time
 from typing import Iterable
 
 from .market_correlation import (
-    MAX_NEWS_LOOKBACK_SECONDS,
     MarketShock,
     CatalystMatch,
     match_catalyst,

@@ -5,7 +5,7 @@ import tempfile
 import time
 import unittest
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from trade_alert.breaking import poll_breaking_inbox
 from trade_alert.config import Config
