@@ -6,7 +6,6 @@ import unittest
 import urllib.error
 from email.message import Message
 from unittest.mock import patch
-from trade_alert.truth_direct import DirectResult
 
 from trade_alert.truth_direct import DirectUnavailable, fetch_public_statuses
 
