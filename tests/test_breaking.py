@@ -137,7 +137,7 @@ class IndependentBreakingLoop(unittest.IsolatedAsyncioTestCase):
                     stop.set()
                     task.cancel()
                     with self.assertRaises(asyncio.CancelledError):
-                        await task
+                        await asyncio.wait_for(task, timeout=2.0)
                 self.assertEqual(len(notifications), 1)
                 self.assertEqual(store.unread_alert_count(), 1)
             finally:
