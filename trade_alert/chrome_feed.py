@@ -83,6 +83,7 @@ def poll_browser_feed(
                             stats["ocr_deferred"] += 1
                             continue
                     except ValueError:
+                        # Invalid retry metadata is ignored so this image can be retried.
                         pass
             image_text = ""
             if image_url_from_post(row):
