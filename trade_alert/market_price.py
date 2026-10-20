@@ -199,7 +199,7 @@ async def collect_resident_events(config: Config) -> list[dict]:
             "realtime_snapshot",
             {"handles": ["cross-brent-dec26-1m", "cross-nasdaq-1m"],
              "mode": "decision", "bars": 8, "include_studies": False,
-             "stale_after_ms": 120000},
+             "stale_after_ms": 120000, "consumer": "trade_alert"},
         )
     except MCPToolError as exc:
         raise MarketCorrelationError("DTV realtime snapshot unavailable") from exc
