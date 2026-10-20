@@ -269,6 +269,7 @@ async def read_direct_once(config: Config, store: StateStore, *,
                         media_deferred += 1
                         continue
                 except ValueError:
+                    # A corrupt retry deadline must not suppress this post's OCR attempt.
                     pass
         if post.media_url:
             image_text, ocr_status = await asyncio.to_thread(

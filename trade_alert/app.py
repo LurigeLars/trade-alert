@@ -599,6 +599,7 @@ async def run_loop(
             try:
                 await worker
             except asyncio.CancelledError:
+                # Expected while awaiting orderly shutdown of cancelled worker tasks.
                 pass
 
 
