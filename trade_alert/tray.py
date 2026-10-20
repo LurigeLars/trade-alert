@@ -15,7 +15,6 @@ from PIL import Image, ImageDraw
 
 from .config import Config, app_dir
 from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS, OIL_ROUTING_SYMBOLS, normalize_news_link
-from .notifier import notify
 from .state import MAX_ALERT_HISTORY, AlertRecord, StateStore
 from .windows_ui import (
     allow_windows_dark_mode_for_window,
@@ -466,8 +465,11 @@ class TrayController:
         config: Config,
         monitor_loop: Callable[..., Awaitable[None]],
         log_path: Path,
+        send_notification: Callable[[str, str], bool],
     ):
         self.config = config
+        # Inject the toast sender from app.py; tray must not import notifier.
+        self._send_notification = send_notification
         self._monitor_loop = monitor_loop
         self._log_path = log_path
         self._native_menu_theme = configure_windows_native_menu_theme(config.theme_mode)
@@ -691,7 +693,7 @@ class TrayController:
     def _test_notification(self, _icon, _item) -> None:
         previous_status = self._status
         previous_health = self._health
-        if notify("Trade Alert", "Tray-appen fungerar."):
+        if self._send_notification("Trade Alert", "Tray-appen fungerar."):
             self._set_status("Testnotis skickad", "ok")
         else:
             self._set_status("Notisfel · se logg", "error")
@@ -720,5 +722,6 @@ def run_tray(
     config: Config,
     monitor_loop: Callable[..., Awaitable[None]],
     log_path: Path,
+    send_notification: Callable[[str, str], bool],
 ) -> None:
-    TrayController(config, monitor_loop, log_path).run()
+    TrayController(config, monitor_loop, log_path, send_notification).run()
