@@ -31,6 +31,7 @@ from .state import StateStore
 from .windows_ui import configure_windows_app_identity, configure_windows_dpi_awareness
 
 LOG_PATH = app_dir() / "trade-alert.log"
+OFFICIAL_TRADINGVIEW_DISABLED = True  # User-requested hard stop, including legacy configs.
 
 
 def _setup_logging(verbose: bool = False) -> None:
@@ -132,7 +133,7 @@ async def _collect(
     except MCPToolError as exc:
         logging.warning("DTV News Flow unavailable: %s", exc)
 
-    if include_official:
+    if include_official and not OFFICIAL_TRADINGVIEW_DISABLED:
         for symbol in config.official_symbols:
             try:
                 items.extend(
@@ -305,7 +306,7 @@ async def _run_news_loop(
             continue
 
         now = time.monotonic()
-        include_official = now >= next_official
+        include_official = not OFFICIAL_TRADINGVIEW_DISABLED and now >= next_official
         try:
             result = await run_once(
                 config,
@@ -336,6 +337,10 @@ async def _run_news_loop(
                             pass
                     if not healthy:
                         status_callback("Degraderad · Brent/Nasdaq prisdata saknas", "waiting")
+                    elif OFFICIAL_TRADINGVIEW_DISABLED and result["dtv_ok"]:
+                        status_callback("Aktiv · Brent/Nasdaq + DTV News Flow", "ok")
+                    elif OFFICIAL_TRADINGVIEW_DISABLED:
+                        status_callback("Degraderad · DTV-nyheter saknas", "waiting")
                     elif not (result["dtv_ok"] or last_official_ok):
                         status_callback("Degraderad · marknadsnyheter saknas", "waiting")
                     elif result["dtv_ok"] and last_official_ok:
