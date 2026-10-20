@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-DEFAULT_OFFICIAL_SYMBOLS = ("ICEEUR:BRN1!", "NYMEX:RB1!")
+DEFAULT_OFFICIAL_SYMBOLS = ()  # Official TradingView retired by user request.
 
 
 def app_dir() -> Path:

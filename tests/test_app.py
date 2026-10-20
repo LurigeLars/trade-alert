@@ -4,13 +4,38 @@ import time
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from trade_alert.app import _dtv_since_with_overlap, run_once
+from trade_alert.app import _dtv_since_with_overlap, _collect, run_once, OFFICIAL_TRADINGVIEW_DISABLED
 from trade_alert.config import Config
-from trade_alert.news import Headline
+from trade_alert.news import Headline, DTVNewsBatch, DTVWatchlistContext
 from trade_alert.state import StateStore
 
 
 class AppTests(unittest.IsolatedAsyncioTestCase):
+    async def test_official_provider_never_called_even_with_old_local_config(self):
+        self.assertTrue(OFFICIAL_TRADINGVIEW_DISABLED)
+        context = DTVWatchlistContext(
+            watchlist_id="123", name="test", symbols=("ICEEUR:BRN1!",),
+            auto_discovered=False,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            try:
+                old_config = Config(official_symbols=("ICEEUR:BRN1!", "NYMEX:RB1!"))
+                with (
+                    patch("trade_alert.app._resolve_dtv_context", new=AsyncMock(return_value=context)),
+                    patch("trade_alert.app.fetch_dtv_news", new=AsyncMock(return_value=DTVNewsBatch((), context, True))),
+                    patch("trade_alert.app.fetch_official_news", new=AsyncMock()) as official,
+                ):
+                    items, dtv_ok, official_ok, _ = await _collect(
+                        old_config, store, include_official=True, dtv_since=None,
+                    )
+                official.assert_not_awaited()
+                self.assertEqual([], items)
+                self.assertTrue(dtv_ok)
+                self.assertFalse(official_ok)
+            finally:
+                store.close()
+
     def test_dtv_cursor_replays_overlap_window(self):
         self.assertEqual(
             "2026-10-08T22:30:00+00:00",

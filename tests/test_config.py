@@ -61,7 +61,7 @@ class ConfigTests(unittest.TestCase):
             migrated = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(3600, migrated["dtv_replay_overlap_seconds"])
 
-    def test_legacy_default_official_symbols_adds_rbob(self):
+    def test_legacy_default_official_symbols_are_retired(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "config.json"
             path.write_text(
@@ -74,10 +74,10 @@ class ConfigTests(unittest.TestCase):
                 encoding="utf-8",
             )
             config = Config.load(path)
-            self.assertEqual(("ICEEUR:BRN1!", "NYMEX:RB1!"), config.official_symbols)
+            self.assertEqual((), config.official_symbols)
 
             migrated = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(["ICEEUR:BRN1!", "NYMEX:RB1!"], migrated["official_symbols"])
+            self.assertEqual([], migrated["official_symbols"])
 
     def test_custom_official_symbols_are_not_rewritten(self):
         with tempfile.TemporaryDirectory() as tmp:

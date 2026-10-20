@@ -67,6 +67,21 @@ An independent [Trump's Truth RSS monitor](docs/trump-truth-rss.md) provides a p
 
 It is deliberately **not** an execution system. It has no broker login, order placement, order modification, or order-cancellation capability.
 
+## Official TradingView disabled — 20 October 2026
+
+By explicit user instruction, **Trade Alert no longer polls Official TradingView**
+even when an existing local `config.json` still contains legacy `official_symbols`.
+The hard stop applies to startup and to one-shot runs, and the default official
+symbol list is empty. Existing DTV News Flow, Brent/Nasdaq resident 1-minute
+market prices, Windows alerts, and other independent sources remain active.
+
+The status `Aktiv · Brent/Nasdaq + DTV News Flow` refers to successful DTV
+news and resident pricing; it no longer implies Official TradingView coverage.
+After installing, restart the Windows tray application; the existing running
+`pythonw.exe` retains the old imported code until restarted. New settings are
+not a substitute for deployment verification. No external Official TradingView
+quota is bypassed.
+
 ## Current deployment and security posture
 
 - local Windows tray process, started per-user with `pythonw.exe`.
