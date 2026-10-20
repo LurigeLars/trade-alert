@@ -194,7 +194,7 @@ class DirectIntakeTests(unittest.IsolatedAsyncioTestCase):
                     await asyncio.sleep(0.1)
                     task.cancel()
                     with self.assertRaises(asyncio.CancelledError):
-                        await task
+                        await asyncio.wait_for(task, timeout=2.0)
                 self.assertEqual(calls, ["direct"])
             finally:
                 store.close()
