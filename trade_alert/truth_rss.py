@@ -189,6 +189,7 @@ async def read_rss_once(config: Config, store: StateStore, *,
             direct_healthy = 0 <= moment - direct_time <= max(
                 60, config.truth_direct_poll_seconds * 4)
         except ValueError:
+            # Invalid direct-source timestamps are not proof of health; allow RSS fallback.
             pass
     seen_count = notified = alerted = 0
     for post in sorted(result.posts, key=lambda p: p.published):
