@@ -24,6 +24,29 @@ from trade_alert.tray import (
 
 
 class TrayTests(unittest.TestCase):
+    def test_tray_test_notification_uses_injected_sender(self):
+        controller = TrayController.__new__(TrayController)
+        controller._status = "Monitoring"
+        controller._health = "ok"
+        controller._set_status = Mock()
+        controller._send_notification = Mock(return_value=True)
+
+        with patch("trade_alert.tray.threading.Timer") as timer:
+            controller._test_notification(None, None)
+            controller._send_notification.assert_called_once_with(
+                "Trade Alert", "Tray-appen fungerar."
+            )
+            controller._set_status.assert_called_once_with("Testnotis skickad", "ok")
+            timer.assert_called_once_with(3.0, unittest.mock.ANY)
+            timer.return_value.start.assert_called_once()
+
+        controller._send_notification = Mock(return_value=False)
+        controller._set_status.reset_mock()
+        with patch("trade_alert.tray.threading.Timer") as timer:
+            controller._test_notification(None, None)
+            controller._set_status.assert_called_once_with("Notisfel · se logg", "error")
+            timer.assert_not_called()
+
     def test_latest_alerts_is_the_only_default_tray_action(self):
         controller = TrayController.__new__(TrayController)
         controller.config = Config()
