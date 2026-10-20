@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 from trade_alert.config import Config
 from trade_alert.market_correlation import MarketCorrelationError
 from trade_alert.market_price import (
+    StaleResidentPriceError,
     parse_resident_snapshot,
     collect_resident_events,
     activate_if_resident,
@@ -103,6 +104,28 @@ class MarketPriceTests(unittest.TestCase):
     def test_refuses_stale_completed_minute(self):
         with self.assertRaises(MarketCorrelationError):
             parse_resident_snapshot(snapshot(), config(), now=T + 360)
+
+    def test_stale_prices_have_distinct_error_without_weakening_validation(self):
+        old_quote = snapshot()
+        old_quote["snapshots"][0]["quote"]["age_at_retrieval_ms"] = 2_380_000
+        with self.assertRaisesRegex(StaleResidentPriceError, "timestamp stale"):
+            parse_resident_snapshot(old_quote, config(), now=T + 15)
+
+        old_bar = snapshot()
+        with self.assertRaisesRegex(StaleResidentPriceError, "current 1m bar stale"):
+            parse_resident_snapshot(old_bar, config(), now=T + 360)
+
+        missing = snapshot()
+        missing["missing"] = ["cross-nasdaq-1m"]
+        with self.assertRaises(MarketCorrelationError) as ctx:
+            parse_resident_snapshot(missing, config(), now=T + 15)
+        self.assertNotIsInstance(ctx.exception, StaleResidentPriceError)
+
+        no_timestamp = snapshot()
+        no_timestamp["snapshots"][0]["quote"].pop("age_at_retrieval_ms")
+        with self.assertRaises(MarketCorrelationError) as ctx:
+            parse_resident_snapshot(no_timestamp, config(), now=T + 15)
+        self.assertNotIsInstance(ctx.exception, StaleResidentPriceError)
 
     def test_requires_latest_quote_not_a_delayed_proxy(self):
         s = snapshot()

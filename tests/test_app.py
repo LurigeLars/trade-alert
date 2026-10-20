@@ -1,16 +1,84 @@
+import asyncio
 import pathlib
 import tempfile
 import time
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from trade_alert.app import _dtv_since_with_overlap, _collect, run_once, OFFICIAL_TRADINGVIEW_DISABLED
+from trade_alert.app import (
+    _dtv_since_with_overlap, _collect, _run_news_loop,
+    _run_market_correlation_loop, run_once, OFFICIAL_TRADINGVIEW_DISABLED,
+)
 from trade_alert.config import Config
 from trade_alert.news import Headline, DTVNewsBatch, DTVWatchlistContext
+from trade_alert.market_price import StaleResidentPriceError
 from trade_alert.state import StateStore
 
 
 class AppTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stale_resident_source_sets_distinct_health_without_alert(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            stop = asyncio.Event()
+            async def stop_after_poll(_seconds, _stop_event=None):
+                stop.set()
+            try:
+                with (
+                    patch("trade_alert.app.collect_resident_events",
+                          new=AsyncMock(side_effect=StaleResidentPriceError(
+                              "DTV resident quote timestamp stale"))),
+                    patch("trade_alert.app._sleep_interruptible",
+                          side_effect=stop_after_poll),
+                ):
+                    await _run_market_correlation_loop(
+                        Config(market_correlation_enabled=True),
+                        store, stop_event=stop,
+                    )
+                self.assertEqual("STALE", store.get_meta("cross_market_price_status"))
+                self.assertEqual(
+                    "DTV resident quote timestamp stale",
+                    store.get_meta("cross_market_price_last_error"),
+                )
+                self.assertIsNone(store.get_meta("cross_market_price_last_ok"))
+                self.assertEqual(0, store.unread_alert_count())
+            finally:
+                store.close()
+
+    async def test_health_text_distinguishes_stale_from_missing_and_active(self):
+        cfg = Config(market_correlation_enabled=True)
+        responses = []
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            try:
+                for source_status, expected in (
+                    ("STALE", "Väntar på färska Brent/Nasdaq-priser"),
+                    ("DEGRADED", "Degraderad · Brent/Nasdaq prisdata saknas"),
+                    ("ACTIVE", "Aktiv · Brent/Nasdaq + DTV News Flow"),
+                ):
+                    store.set_meta("cross_market_price_status", source_status)
+                    if source_status == "ACTIVE":
+                        store.set_meta("cross_market_price_last_ok", str(time.time()))
+                    stop = asyncio.Event()
+                    async def stop_after_poll(_seconds, _stop_event=None):
+                        stop.set()
+                    with (
+                        patch("trade_alert.app.run_once",
+                              new=AsyncMock(return_value={
+                                  "fresh": 0, "notified": 0,
+                                  "dtv_ok": True, "official_ok": False,
+                              })),
+                        patch("trade_alert.app._sleep_interruptible",
+                              side_effect=stop_after_poll),
+                    ):
+                        await _run_news_loop(
+                            cfg, store, stop_event=stop,
+                            status_callback=lambda text, health: responses.append((text, health)),
+                        )
+                    self.assertEqual(expected, responses[-1][0])
+                    self.assertEqual("waiting" if source_status != "ACTIVE" else "ok", responses[-1][1])
+            finally:
+                store.close()
+
     async def test_official_provider_never_called_even_with_old_local_config(self):
         self.assertTrue(OFFICIAL_TRADINGVIEW_DISABLED)
         context = DTVWatchlistContext(
