@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-DEFAULT_OFFICIAL_SYMBOLS = ("ICEEUR:BRN1!", "NYMEX:RB1!")
+DEFAULT_OFFICIAL_SYMBOLS = ()  # Official TradingView retired by user request.
 
 
 def app_dir() -> Path:
@@ -47,6 +47,14 @@ class Config:
     chrome_bridge_enabled: bool = False
     chrome_bridge_poll_seconds: float = 1.0
     chrome_bridge_max_age_seconds: int = 300
+    # Disabled until a verified, locally authorized real-time price producer exists.
+    market_correlation_enabled: bool = False
+    market_correlation_brent_symbol: str = "NYMEX:BZZ2026"
+    market_correlation_nasdaq_symbol: str = "CME_MINI:NQ1!"
+    market_correlation_authorized_sources: tuple[str, ...] = ("DTV_RESIDENT",)
+    market_correlation_max_age_seconds: int = 180
+    market_correlation_poll_seconds: float = 10.0
+    market_correlation_auto_enable_resident: bool = True
 
     @classmethod
     def load(cls, path: Path | None = None) -> "Config":
@@ -77,6 +85,8 @@ class Config:
             raw["official_symbols"] = symbols
         if "breaking_authorized_sources" in raw:
             raw["breaking_authorized_sources"] = tuple(raw["breaking_authorized_sources"])
+        if "market_correlation_authorized_sources" in raw:
+            raw["market_correlation_authorized_sources"] = tuple(raw["market_correlation_authorized_sources"])
         config = cls(**raw)
         config.validate()
         if migrated:
@@ -131,6 +141,22 @@ class Config:
             raise ValueError("chrome_bridge_poll_seconds must be 0.2-30")
         if not 30 <= int(self.chrome_bridge_max_age_seconds) <= 1800:
             raise ValueError("chrome_bridge_max_age_seconds must be 30-1800")
+        if not 5.0 <= float(self.market_correlation_poll_seconds) <= 60.0:
+            raise ValueError("market_correlation_poll_seconds must be 5-60")
+        if not isinstance(self.market_correlation_auto_enable_resident, bool):
+            raise ValueError("market_correlation_auto_enable_resident must be boolean")
+        if not isinstance(self.market_correlation_enabled, bool):
+            raise ValueError("market_correlation_enabled must be boolean")
+        if not 60 <= int(self.market_correlation_max_age_seconds) <= 900:
+            raise ValueError("market_correlation_max_age_seconds must be 60-900")
+        for symbol in (self.market_correlation_brent_symbol, self.market_correlation_nasdaq_symbol):
+            if not isinstance(symbol, str) or ":" not in symbol or len(symbol) > 128:
+                raise ValueError("market correlation references must be exact exchange:symbol pairs")
+        if len(self.market_correlation_authorized_sources) != len(set(self.market_correlation_authorized_sources)):
+            raise ValueError("duplicate market-correlation sources")
+        for name in self.market_correlation_authorized_sources:
+            if not isinstance(name, str) or not name.isupper() or len(name) > 80:
+                raise ValueError("invalid market-correlation source")
         if self.dtv_watchlist_id is not None and not str(self.dtv_watchlist_id).isdigit():
             raise ValueError("dtv_watchlist_id must be numeric when set")
         for symbol in self.official_symbols:
@@ -144,5 +170,6 @@ class Config:
         payload = asdict(self)
         payload["official_symbols"] = list(self.official_symbols)
         payload["breaking_authorized_sources"] = list(self.breaking_authorized_sources)
+        payload["market_correlation_authorized_sources"] = list(self.market_correlation_authorized_sources)
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return path

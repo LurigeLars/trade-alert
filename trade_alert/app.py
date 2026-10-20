@@ -15,6 +15,9 @@ from .truth_direct import DirectUnavailable, fetch_public_statuses, read_direct_
 from .chrome_feed import poll_browser_feed
 from .chrome_receiver import start_chrome_receiver
 from .mcp_client import MCPToolError
+from .market_correlation import MarketCorrelationError, process_market_incidents
+from .market_price import activate_if_resident, collect_resident_events
+from .market_evidence import cache_headlines, cached_headlines, reconcile_incidents
 from .news import (
     DTVWatchlistContext,
     Headline,
@@ -28,6 +31,7 @@ from .state import StateStore
 from .windows_ui import configure_windows_app_identity, configure_windows_dpi_awareness
 
 LOG_PATH = app_dir() / "trade-alert.log"
+OFFICIAL_TRADINGVIEW_DISABLED = True  # User-requested hard stop, including legacy configs.
 
 
 def _setup_logging(verbose: bool = False) -> None:
@@ -129,7 +133,7 @@ async def _collect(
     except MCPToolError as exc:
         logging.warning("DTV News Flow unavailable: %s", exc)
 
-    if include_official:
+    if include_official and not OFFICIAL_TRADINGVIEW_DISABLED:
         for symbol in config.official_symbols:
             try:
                 items.extend(
@@ -234,6 +238,18 @@ async def run_once(
         store.mark_seen(item.key, at=now)
         store.mark_seen_item(item.dedupe_key, at=now)
 
+    # Market-data collection runs independently from the news path;
+    # news source outages must never block price detection.
+    market_evidence = {"cached": 0, "updated": 0, "notified": 0}
+    if config.market_correlation_enabled:
+        try:
+            market_evidence["cached"] = cache_headlines(store, items, now=now)
+            updates = reconcile_incidents(store, now=now, alert_callback=alert_callback)
+            market_evidence["updated"] = updates["updated"]
+            market_evidence["notified"] = updates["notified"]
+        except Exception:
+            logging.exception("cross-market news revision failed")
+
     if dtv_ok:
         store.set_meta("dtv_last_success", datetime.now(timezone.utc).isoformat())
     if dtv_fetched and dtv_first_cycle:
@@ -258,6 +274,7 @@ async def run_once(
         "dtv_ok": dtv_ok,
         "dtv_fetched": dtv_fetched,
         "official_ok": official_ok,
+        "market_evidence": market_evidence,
     }
 
 
@@ -289,7 +306,7 @@ async def _run_news_loop(
             continue
 
         now = time.monotonic()
-        include_official = now >= next_official
+        include_official = not OFFICIAL_TRADINGVIEW_DISABLED and now >= next_official
         try:
             result = await run_once(
                 config,
@@ -308,7 +325,29 @@ async def _run_news_loop(
             )
 
             if status_callback is not None:
-                if result["dtv_ok"] and last_official_ok:
+                if config.market_correlation_enabled:
+                    ok_since = store.get_meta("cross_market_price_last_ok")
+                    healthy = False
+                    if ok_since is not None:
+                        try:
+                            healthy = (time.time() - float(ok_since)
+                                       <= max(45, 3 * config.market_correlation_poll_seconds)
+                                       and store.get_meta("cross_market_price_status") == "ACTIVE")
+                        except ValueError:
+                            pass
+                    if not healthy:
+                        status_callback("Degraderad · Brent/Nasdaq prisdata saknas", "waiting")
+                    elif OFFICIAL_TRADINGVIEW_DISABLED and result["dtv_ok"]:
+                        status_callback("Aktiv · Brent/Nasdaq + DTV News Flow", "ok")
+                    elif OFFICIAL_TRADINGVIEW_DISABLED:
+                        status_callback("Degraderad · DTV-nyheter saknas", "waiting")
+                    elif not (result["dtv_ok"] or last_official_ok):
+                        status_callback("Degraderad · marknadsnyheter saknas", "waiting")
+                    elif result["dtv_ok"] and last_official_ok:
+                        status_callback("Aktiv · Brent/Nasdaq + nyheter", "ok")
+                    else:
+                        status_callback("Aktiv · Brent/Nasdaq / nyhetsfallback", "ok")
+                elif result["dtv_ok"] and last_official_ok:
                     status_callback("Aktiv · News Flow primär + Official TV", "ok")
                 elif result["dtv_ok"]:
                     status_callback("Aktiv · News Flow primär", "ok")
@@ -326,6 +365,61 @@ async def _run_news_loop(
         if include_official:
             next_official = time.monotonic() + config.official_poll_seconds
         await _sleep_interruptible(config.poll_seconds, stop_event)
+
+
+async def _run_market_correlation_loop(
+    config: Config, store: StateStore, *, stop_event=None,
+    pause_event=None, alert_callback=None,
+) -> None:
+    """Independent ten-second DTV resident 1m detector.
+
+    Do not wait for the broad news collector, which can backfill late.
+    Enforce fail-closed freshness and visible source health.
+    """
+    while stop_event is None or not stop_event.is_set():
+        if pause_event is not None and pause_event.is_set():
+            await _sleep_interruptible(0.5, stop_event)
+            continue
+        try:
+            events = await collect_resident_events(config)
+            if events:
+                matches = process_market_incidents(
+                    config, store, cached_headlines(store),
+                    records=events, alert_callback=alert_callback,
+                )
+                if matches["accepted"] or matches["rejected"]:
+                    logging.info("cross-market minute shocks: %s", matches)
+            store.set_meta("cross_market_price_last_ok", str(time.time()))
+            store.set_meta("cross_market_price_status", "ACTIVE")
+            store.set_meta("cross_market_price_last_error", "")
+        except Exception as exc:
+            store.set_meta("cross_market_price_status", "DEGRADED")
+            store.set_meta("cross_market_price_last_error", str(exc)[:240])
+            logging.warning("Brent/Nasdaq realtime coverage degraded: %s", exc)
+        await _sleep_interruptible(config.market_correlation_poll_seconds, stop_event)
+
+
+async def _run_market_activation_loop(
+    config: Config, store: StateStore, *, stop_event=None,
+    pause_event=None, alert_callback=None,
+) -> None:
+    """Background-only worker autodetection; never hold up existing alerts."""
+    while stop_event is None or not stop_event.is_set():
+        if pause_event is not None and pause_event.is_set():
+            await _sleep_interruptible(0.5, stop_event)
+            continue
+        try:
+            if await activate_if_resident(config):
+                await _run_market_correlation_loop(
+                    config, store, stop_event=stop_event,
+                    pause_event=pause_event, alert_callback=alert_callback,
+                )
+                return
+        except Exception:
+            logging.exception("cross-market worker autodetection failed")
+        # DTV may come online after Windows startup; retry without touching
+        # any ordinary oil/news/policy intake work.
+        await _sleep_interruptible(120.0, stop_event)
 
 
 async def _run_breaking_loop(
@@ -448,13 +542,22 @@ async def run_loop(
     alert_callback=None,
 ) -> None:
     if not (config.breaking_inbox_enabled or config.truth_rss_enabled
-            or config.truth_direct_enabled or config.chrome_bridge_enabled):
+            or config.truth_direct_enabled or config.chrome_bridge_enabled
+            or config.market_correlation_enabled
+            or config.market_correlation_auto_enable_resident):
         await _run_news_loop(
             config, store, stop_event=stop_event, pause_event=pause_event,
             status_callback=status_callback, alert_callback=alert_callback,
         )
         return
     workers = []
+    if config.market_correlation_enabled or config.market_correlation_auto_enable_resident:
+        workers.append(asyncio.create_task(
+            _run_market_activation_loop(
+                config, store, stop_event=stop_event, pause_event=pause_event,
+                alert_callback=alert_callback,
+            )
+        ))
     if config.breaking_inbox_enabled:
         workers.append(asyncio.create_task(
             _run_breaking_loop(

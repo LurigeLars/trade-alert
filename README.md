@@ -67,6 +67,21 @@ An independent [Trump's Truth RSS monitor](docs/trump-truth-rss.md) provides a p
 
 It is deliberately **not** an execution system. It has no broker login, order placement, order modification, or order-cancellation capability.
 
+## Official TradingView disabled — 20 October 2026
+
+By explicit user instruction, **Trade Alert no longer polls Official TradingView**
+even when an existing local `config.json` still contains legacy `official_symbols`.
+The hard stop applies to startup and to one-shot runs, and the default official
+symbol list is empty. Existing DTV News Flow, Brent/Nasdaq resident 1-minute
+market prices, Windows alerts, and other independent sources remain active.
+
+The status `Aktiv · Brent/Nasdaq + DTV News Flow` refers to successful DTV
+news and resident pricing; it no longer implies Official TradingView coverage.
+After installing, restart the Windows tray application; the existing running
+`pythonw.exe` retains the old imported code until restarted. New settings are
+not a substitute for deployment verification. No external Official TradingView
+quota is bypassed.
+
 ## Current deployment and security posture
 
 - local Windows tray process, started per-user with `pythonw.exe`.
@@ -105,6 +120,32 @@ Trade Alert
 ```
 
 Keeping this in a separate repository also isolates desktop UI, Windows lifecycle and notification failures from Trade Spine's durable portfolio/thesis state.
+
+## Brent/Nasdaq completed-minute shock evidence
+
+The existing Trade Alert process contains an independent read-only
+10-second poller for **preprovisioned DTV resident 1-minute futures**.
+It detects **Brent December 2026 <= -0.50% / Nasdaq-100 future >= +0.15%**
+during the same **completed** 1-minute candle, with a 30-minute
+cluster cooldown. Exact verified futures symbols, realtime entitlement,
+source freshness and contiguous minute bars are mandatory.
+
+The feature defaults to **off for other installations**. If DTV's
+worker registry already contains the specifically provisioned pair
+`cross-brent-dec26-1m` and `cross-nasdaq-1m`, Trade Alert
+automatically enables it on the next app startup, saving that setting
+locally. Set `market_correlation_auto_enable_resident=false` to opt out.
+No visible TradingView chart switching, broker connection, or order routing.
+
+The existing DTV/Official news collector remains the news source; there
+is no duplicate crawler. Pre-event publications can be correlated with
+the market shock but **timestamp association is not causation**.
+A locally retained 30-day operational incident audit records news
+`published`, first observation, and later/backfilled revisions.
+When source data is incomplete the status is degraded, not healthy.
+No automatic buy/sell recommendations are generated.
+
+See [operational contract, source health and limitations](docs/brent-nasdaq-event-correlation.md).
 
 ## News routing
 
