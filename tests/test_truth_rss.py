@@ -10,7 +10,7 @@ from trade_alert.app import run_loop
 from trade_alert.config import Config
 from trade_alert.state import StateStore
 from trade_alert.truth_rss import (
-    RSSPost, RSSResult, RSSUnavailable, parse_rss, read_rss_once,
+    RSSResult, RSSUnavailable, parse_rss, read_rss_once,
 )
 
 T0 = datetime(2026, 10, 8, 16, 17, 0, tzinfo=timezone.utc).timestamp()

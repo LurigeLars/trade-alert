@@ -15,7 +15,7 @@ from .truth_direct import DirectUnavailable, fetch_public_statuses, read_direct_
 from .chrome_feed import poll_browser_feed
 from .chrome_receiver import start_chrome_receiver
 from .mcp_client import MCPToolError
-from .market_correlation import MarketCorrelationError, process_market_incidents
+from .market_correlation import process_market_incidents
 from .market_price import activate_if_resident, collect_resident_events
 from .market_evidence import cache_headlines, cached_headlines, reconcile_incidents
 from .news import (
@@ -334,6 +334,7 @@ async def _run_news_loop(
                                        <= max(45, 3 * config.market_correlation_poll_seconds)
                                        and store.get_meta("cross_market_price_status") == "ACTIVE")
                         except ValueError:
+                            # Invalid health telemetry is treated as degraded (healthy stays False).
                             pass
                     if not healthy:
                         status_callback("Degraderad · Brent/Nasdaq prisdata saknas", "waiting")
