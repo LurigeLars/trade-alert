@@ -16,7 +16,7 @@ from .chrome_feed import poll_browser_feed
 from .chrome_receiver import start_chrome_receiver
 from .mcp_client import MCPToolError
 from .market_correlation import process_market_incidents
-from .market_price import activate_if_resident, collect_resident_events
+from .market_price import StaleResidentPriceError, activate_if_resident, collect_resident_events
 from .market_evidence import cache_headlines, cached_headlines, reconcile_incidents
 from .news import (
     DTVWatchlistContext,
@@ -337,7 +337,12 @@ async def _run_news_loop(
                             # Invalid health telemetry is treated as degraded (healthy stays False).
                             pass
                     if not healthy:
-                        status_callback("Degraderad · Brent/Nasdaq prisdata saknas", "waiting")
+                        # A responsive DTV feed with old prices is not a missing
+                        # feed. Both conditions still fail closed for alerts.
+                        if store.get_meta("cross_market_price_status") == "STALE":
+                            status_callback("Väntar på färska Brent/Nasdaq-priser", "waiting")
+                        else:
+                            status_callback("Degraderad · Brent/Nasdaq prisdata saknas", "waiting")
                     elif OFFICIAL_TRADINGVIEW_DISABLED and result["dtv_ok"]:
                         status_callback("Aktiv · Brent/Nasdaq + DTV News Flow", "ok")
                     elif OFFICIAL_TRADINGVIEW_DISABLED:
@@ -393,6 +398,10 @@ async def _run_market_correlation_loop(
             store.set_meta("cross_market_price_last_ok", str(time.time()))
             store.set_meta("cross_market_price_status", "ACTIVE")
             store.set_meta("cross_market_price_last_error", "")
+        except StaleResidentPriceError as exc:
+            store.set_meta("cross_market_price_status", "STALE")
+            store.set_meta("cross_market_price_last_error", str(exc)[:240])
+            logging.info("Brent/Nasdaq awaiting fresh resident prices: %s", exc)
         except Exception as exc:
             store.set_meta("cross_market_price_status", "DEGRADED")
             store.set_meta("cross_market_price_last_error", str(exc)[:240])

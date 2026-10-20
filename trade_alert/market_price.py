@@ -17,6 +17,10 @@ from .mcp_client import MCPToolError, call_json_tool
 SOURCE_ID = "DTV_RESIDENT"
 
 
+class StaleResidentPriceError(MarketCorrelationError):
+    """DTV delivered the requested market data, but its timestamp is too old."""
+
+
 def _object(value: Any) -> dict:
     if not isinstance(value, dict):
         raise MarketCorrelationError("non-object DTV payload")
@@ -42,8 +46,10 @@ def _verified_bars(snap: dict, expected_symbol: str, *, now: float) -> dict[int,
     if delay_minutes not in (None, 0):
         raise MarketCorrelationError("market data delayed")
     age = quote.get("age_at_retrieval_ms")
-    if not isinstance(age, (float, int)) or not math.isfinite(age) or age < 0 or age > 120000:
-        raise MarketCorrelationError("DTV resident quote timestamp stale/unavailable")
+    if not isinstance(age, (float, int)) or not math.isfinite(age) or age < 0:
+        raise MarketCorrelationError("DTV resident quote timestamp unavailable")
+    if age > 120000:
+        raise StaleResidentPriceError("DTV resident quote timestamp stale")
     bars = snap.get("recent_bars")
     current = snap.get("current_bar")
     if not isinstance(bars, list) or not isinstance(current, dict) or len(bars) < 3:
@@ -51,8 +57,10 @@ def _verified_bars(snap: dict, expected_symbol: str, *, now: float) -> dict[int,
     active_t = current.get("time")
     if not isinstance(active_t, (float, int)) or active_t <= 0 or int(active_t) % 60:
         raise MarketCorrelationError("invalid current 1m start")
-    if now - active_t < -5 or now - active_t > 125:
-        raise MarketCorrelationError("current bar not fresh")
+    if now - active_t < -5:
+        raise MarketCorrelationError("current bar timestamp is in the future")
+    if now - active_t > 125:
+        raise StaleResidentPriceError("DTV resident current 1m bar stale")
     # The bar tagged active_t is still open. NEVER ingest its close.
     complete: dict[int, float] = {}
     for bar in bars:

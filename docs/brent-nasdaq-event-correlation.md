@@ -38,8 +38,23 @@ match recent completed bars within a bounded 180s source window.
 
 A DTV timeout, missing worker, symbol or timeframe mismatch, stale
 quote, delayed provider entitlement or disconnected session fails
-closed. Trade Alert shows **Degraded** for the Brent/Nasdaq source
-rather than reporting a healthy monitor.
+closed. No price signal is emitted without both fully verified feeds.
+
+The tray status distinguishes a responding but outdated DTV feed from
+missing/unavailable data:
+- **Väntar på färska Brent/Nasdaq-priser** — one or both resident quote
+  timestamps exceed 120 seconds, or the current 1m candle is too old.
+  Operational state: `cross_market_price_status=STALE`.
+- **Degraderad · Brent/Nasdaq prisdata saknas** — the source call fails,
+  required panes are absent, or other required evidence cannot be verified.
+  Operational state: `cross_market_price_status=DEGRADED`.
+- **Aktiv · Brent/Nasdaq + DTV News Flow** — both resident price feeds pass
+  freshness/entitlement verification and news collection succeeds.
+  Operational state: `cross_market_price_status=ACTIVE`.
+
+The shorter tray label does **not** relax quote-age, completed-candle or
+realtime-entitlement checks. The last failure reason remains in
+`cross_market_price_last_error` in the local state store.
 
 DTV's explicit symbol verification is required. `TVC:UKOIL`,
 `ICEEUR:BRN1!`, Yahoo continuous-futures prices, or stock ETFs
