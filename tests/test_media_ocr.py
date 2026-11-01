@@ -130,7 +130,7 @@ class ImageOCRTests(unittest.TestCase):
         # The CDN may claim image/png even when the content is a different
         # Pillow plugin format. Image.open() must never inspect such bytes.
         disguised = (
-            b"\\xd0\\xcf\\x11\\xe0" + b"X" * 64,  # FPX/OLE2 magic
+            b"\xd0\xcf\x11\xe0" + b"X" * 64,  # FPX/OLE2 magic
             b"GIF89a" + b"X" * 64,
             b"RIFF" + b"X" * 4 + b"WAVE" + b"X" * 16,
         )
