@@ -126,6 +126,21 @@ class ImageOCRTests(unittest.TestCase):
                 with self.assertRaises(OCRFetchFailed):
                     recognize_image_bytes(data, executable="tesseract")
 
+    def test_disguised_formats_are_rejected_before_pillow_dispatch(self):
+        # The CDN may claim image/png even when the content is a different
+        # Pillow plugin format. Image.open() must never inspect such bytes.
+        disguised = (
+            b"\xd0\xcf\x11\xe0" + b"X" * 64,  # FPX/OLE2 magic
+            b"GIF89a" + b"X" * 64,
+            b"RIFF" + b"X" * 4 + b"WAVE" + b"X" * 16,
+        )
+        for data in disguised:
+            with self.subTest(signature=data[:12]):
+                with patch("trade_alert.media_ocr.Image.open") as open_image:
+                    with self.assertRaises(OCRFetchFailed):
+                        recognize_image_bytes(data, executable="tesseract")
+                    open_image.assert_not_called()
+
     def test_fetched_image_never_requires_cloud_ocr(self):
         with patch("trade_alert.media_ocr.tesseract_path", return_value="tesseract"):
             with patch("trade_alert.media_ocr._fetch_image", return_value=picture()) as get:
