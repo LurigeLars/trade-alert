@@ -5,7 +5,7 @@ description = "Local low-latency trade news notifier backed by TradingView and T
 requires-python = ">=3.12"
 dependencies = [
   "mcp==2.3.0",
-  "Pillow==12.3.0",
+  "Pillow==13.0.0",
   "pystray==0.19.5",
   "windows-toasts==1.3.1",
 ]

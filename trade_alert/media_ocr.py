@@ -143,6 +143,16 @@ def recognize_image_bytes(data: bytes, *, executable: str | None = None) -> str:
         raise OCRUnavailable("Tesseract OCR is not installed")
     if not 1 <= len(data) <= MAX_IMAGE_BYTES:
         raise OCRFetchFailed("Image size outside bound")
+    # Validate file signatures before handing untrusted bytes to Pillow.
+    # Image.open() identifies formats by magic bytes rather than the HTTP MIME
+    # type or URL extension, so a disguised FPX/OLE2 payload must never reach it.
+    allowed_signature = (
+        data.startswith(b"\xff\xd8\xff")  # JPEG SOI
+        or data.startswith(b"\x89PNG\r\n\x1a\n")
+        or (len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP")
+    )
+    if not allowed_signature:
+        raise OCRFetchFailed("Unsupported image signature")
     try:
         with Image.open(io.BytesIO(data)) as image:
             if image.format not in ALLOWED_FORMATS:
