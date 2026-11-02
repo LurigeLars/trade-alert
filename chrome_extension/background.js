@@ -389,7 +389,7 @@ async function runBackgroundFetch({enableOnSuccess = false} = {}) {
             cooldown_until: current.cooldown_until};
   }
   inFlight = true;
-  let status = "ERROR";
+  let status;
   let count = 0;
   try {
     // Deliberately no cookies, tokens, proxy rotation, or session spoofing.
