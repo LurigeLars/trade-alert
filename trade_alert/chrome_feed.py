@@ -147,6 +147,7 @@ def poll_browser_feed(
             send = notification or (lambda title, text: notify(
                 title, text, item_key=key,
                 on_click=alert_click(store.path, key, alert_callback),
+                published_at=post.published,
             ))
             if send(f"Trade Alert · Trump {signal.priority} · {signal.category}", body):
                 stats["notified"] += 1
