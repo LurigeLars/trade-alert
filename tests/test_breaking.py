@@ -132,7 +132,9 @@ class IndependentBreakingLoop(unittest.IsolatedAsyncioTestCase):
                     task = asyncio.create_task(run_loop(cfg, store, stop_event=stop))
                     # This is a live event *after* the session cutoff, not startup replay.
                     await asyncio.sleep(0.05)
-                    (inbox / "incoming.json").write_text(json.dumps(record(time.time())))
+                    event = record(time.time())
+                    event["published_at"] = datetime.now(timezone.utc).isoformat()
+                    (inbox / "incoming.json").write_text(json.dumps(event))
                     await asyncio.sleep(0.55)
                     stop.set()
                     task.cancel()
