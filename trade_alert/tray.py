@@ -133,6 +133,7 @@ def monitoring_summary(
         f"• routing-symboler: {routing}\n\n"
         f"Varje appstart\n"
         f"• inlägg publicerade före uppstart sparas som lästa i historiken utan Windows-notis\n"
+        f"• bara den senast publicerade händelsen per 5 s-körning notifieras; minst 60 s mellan banners\n"
         f"• första News Flow-aktiveringen baselinar dessutom äldre rubriker än {config.startup_fresh_seconds} s\n"
         f"• watchlist-ID sparas endast lokalt i Trade Alert-state; inget konto-ID committas\n\n"
         f"Modell\n"
