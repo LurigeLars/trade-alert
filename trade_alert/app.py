@@ -26,7 +26,7 @@ from .news import (
     relevance_score,
     resolve_dtv_watchlist,
 )
-from .notifier import alert_click, notify
+from .notifier import alert_click, notify, flush_pending_notifications, discard_pending_notifications
 from .state import StateStore
 from .windows_ui import configure_windows_app_identity, configure_windows_dpi_awareness
 
@@ -233,6 +233,7 @@ async def run_once(
             if inserted and notify(
                 title, body, item_key=item.key,
                 on_click=alert_click(store.path, item.key, alert_callback),
+                published_at=item.published,
             ):
                 notified += 1
         store.mark_seen(item.key, at=now)
@@ -654,11 +655,13 @@ def main() -> None:
             store.begin_notification_session()
         if args.once:
             result = asyncio.run(run_once(config, store))
+            flush_pending_notifications()
             print(result)
             return
         if args.rss_once:
             try:
                 result = asyncio.run(read_rss_once(config, store))
+                flush_pending_notifications()
             except RSSUnavailable as exc:
                 print({"status": "FAILED", "source": "TRUMP_TRUTH_RSS", "reason": str(exc)})
                 raise SystemExit(2) from exc
@@ -667,6 +670,7 @@ def main() -> None:
         if args.direct_once:
             try:
                 result = asyncio.run(read_direct_once(config, store))
+                flush_pending_notifications()
             except DirectUnavailable as exc:
                 print({"status": "FAILED", "source": "TRUTH_PUBLIC", "reason": str(exc)})
                 raise SystemExit(2) from exc
@@ -677,12 +681,16 @@ def main() -> None:
 
     if os.name == "nt" and not args.no_tray:
         from .tray import run_tray
-        run_tray(config, run_loop, LOG_PATH, notify)
+        try:
+            run_tray(config, run_loop, LOG_PATH, notify)
+        finally:
+            discard_pending_notifications()
     else:
         foreground_store = StateStore()
         try:
             asyncio.run(run_loop(config, foreground_store))
         finally:
+            discard_pending_notifications()
             foreground_store.close()
 
 
