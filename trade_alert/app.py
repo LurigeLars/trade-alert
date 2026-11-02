@@ -551,6 +551,7 @@ async def run_loop(
     status_callback=None,
     alert_callback=None,
 ) -> None:
+    store.begin_notification_session()
     if not (config.breaking_inbox_enabled or config.truth_rss_enabled
             or config.truth_direct_enabled or config.chrome_bridge_enabled
             or config.market_correlation_enabled
@@ -649,6 +650,8 @@ def main() -> None:
 
     store = StateStore()
     try:
+        if args.once or args.rss_once or args.direct_once:
+            store.begin_notification_session()
         if args.once:
             result = asyncio.run(run_once(config, store))
             print(result)
