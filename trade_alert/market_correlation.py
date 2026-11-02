@@ -263,6 +263,7 @@ def process_market_incidents(
             sender = notification or (lambda t, b, key=event.key: notify(
                 t, b, item_key=key,
                 on_click=alert_click(store.path, key, alert_callback),
+                published_at=event.bar_end,
             ))
             if sender("Trade Alert · MARKET SHOCK", body):
                 result["notified"] += 1

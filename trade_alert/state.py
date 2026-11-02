@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -29,6 +30,8 @@ class AlertRecord:
 class StateStore:
     def __init__(self, path: Path | None = None):
         self.path = path or app_dir() / "state.db"
+        # Only active while this process monitors feeds; never persisted between launches.
+        self._notification_not_before: float | None = None
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.con = sqlite3.connect(self.path)
         self.con.execute("PRAGMA journal_mode=WAL")
@@ -119,6 +122,13 @@ class StateStore:
             (MAX_ALERT_HISTORY,),
         )
 
+    def begin_notification_session(self, *, started_at: float | None = None) -> None:
+        """Archive pre-start publications silently on each monitor launch."""
+        cutoff = time.time() if started_at is None else float(started_at)
+        if not math.isfinite(cutoff):
+            raise ValueError("monitor session start must be finite")
+        self._notification_not_before = cutoff
+
     def close(self) -> None:
         self.con.close()
 
@@ -195,12 +205,19 @@ class StateStore:
         link: str | None = None,
         at: float | None = None,
     ) -> bool:
+        """Persist an alert; return True only if it qualifies for a live toast."""
+        published_at = float(published) if published is not None else None
+        can_notify = self._notification_not_before is None or (
+            published_at is not None
+            and math.isfinite(published_at)
+            and published_at >= self._notification_not_before
+        )
         cursor = self.con.execute(
             """
             INSERT OR IGNORE INTO alerts(
                 item_key, created_at, published, dedupe_key, source, provider,
                 headline, body, score, link, unread
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item_key,
@@ -213,13 +230,15 @@ class StateStore:
                 body,
                 int(score),
                 link,
+                int(can_notify),
             ),
         )
         inserted = cursor.rowcount > 0
         if inserted:
             self._trim_alerts()
         self.con.commit()
-        return inserted
+        # Silent backfill stays in history as read and never reaches Windows.
+        return inserted and can_notify
 
     def unread_alert_count(self) -> int:
         row = self.con.execute("SELECT COUNT(*) FROM alerts WHERE unread=1").fetchone()

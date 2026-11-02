@@ -265,6 +265,7 @@ def reconcile_incidents(
                     lambda title, body: notify(
                         title, body, item_key=alert_key,
                         on_click=alert_click(store.path, alert_key, alert_callback),
+                        published_at=match.headline.published,
                     )
                 )
                 if sender("Trade Alert · NY KATALYSATOR", addition):
