@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import os
+import time
 import secrets
 import threading
 import webbrowser
 from collections import OrderedDict
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -139,9 +142,108 @@ def _windows_toaster():
     return WindowsToaster('Trade Alert')
 
 
+# Only one alert per burst is presented to Windows. The rest stay in SQLite history.
+BURST_COLLECT_SECONDS = 5.0
+BURST_COOLDOWN_SECONDS = 60.0
+
+
+@dataclass(frozen=True)
+class _PendingNotification:
+    title: str
+    body: str
+    item_key: str
+    on_click: Callable | None
+    published_at: float | None
+
+    @property
+    def sort_key(self) -> float:
+        if self.published_at is None:
+            return -math.inf
+        try:
+            value = float(self.published_at)
+        except (ValueError, TypeError):
+            return -math.inf
+        return value if math.isfinite(value) else -math.inf
+
+
+class _NotificationBurst:
+    """Thread-safe, process-local cross-source coalescer.
+
+    Collect the first five seconds of a burst and send the latest *published*
+    event. Any further burst within a minute is held until the cooldown ends;
+    an old candidate is replaced by a later-published alert. All callers have
+    already written their own history and deduplication state.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._pending: _PendingNotification | None = None
+        self._timer: threading.Timer | None = None
+        self._last_delivery = -math.inf
+
+    def offer(self, candidate: _PendingNotification) -> bool:
+        with self._lock:
+            if self._pending is None or candidate.sort_key >= self._pending.sort_key:
+                self._pending = candidate
+            if self._timer is None:
+                delay = max(
+                    BURST_COLLECT_SECONDS,
+                    self._last_delivery + BURST_COOLDOWN_SECONDS - time.monotonic(),
+                )
+                self._timer = threading.Timer(delay, self.flush)
+                self._timer.daemon = True
+                self._timer.start()
+        return True  # queued for possible delivery; not proof of toast display
+
+    def flush(self) -> None:
+        with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
+            candidate, self._pending = self._pending, None
+            self._timer = None
+            if candidate is None:
+                return
+            self._last_delivery = time.monotonic()
+        _notify_now(
+            candidate.title, candidate.body,
+            item_key=candidate.item_key, on_click=candidate.on_click,
+        )
+
+    def discard(self) -> None:
+        with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
+            self._timer = None
+            self._pending = None
+
+
+_burst = _NotificationBurst()
+
+
+def flush_pending_notifications() -> None:
+    """One-shot commands can flush the most recent queued alert before exit."""
+    _burst.flush()
+
+
+def discard_pending_notifications() -> None:
+    """Stop pending toast delivery when monitoring exits or closes."""
+    _burst.discard()
+
+
 def notify(title: str, body: str, *, on_click: Callable | None = None,
-           item_key: str | None = None) -> bool:
-    """Report API submission, which does not guarantee Windows displayed a banner."""
+           item_key: str | None = None, published_at: float | None = None,
+           coalesce: bool = True) -> bool:
+    """Queue actionable Windows alerts by burst; tests remain immediate."""
+    if os.name == 'nt' and item_key is not None and coalesce:
+        return _burst.offer(_PendingNotification(
+            str(title), str(body), item_key, on_click, published_at,
+        ))
+    return _notify_now(title, body, on_click=on_click, item_key=item_key)
+
+
+def _notify_now(title: str, body: str, *, on_click: Callable | None = None,
+                item_key: str | None = None) -> bool:
+    """Submit one toast to Windows; acceptance does not ensure display."""
     if os.name != 'nt':
         print(f'[{title}] {body}')
         return True

@@ -169,6 +169,53 @@ class StateTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_restart_silences_old_items_but_preserves_history_and_new_alerts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "state.db"
+            store = StateStore(path)
+            try:
+                self.assertTrue(store.record_alert(
+                    item_key="existing", source="NEWS", headline="Existing",
+                    body="body", score=3, published=850.0, at=900.0,
+                ))
+                store.begin_notification_session(started_at=1000.0)
+                self.assertFalse(store.record_alert(
+                    item_key="replayed", source="NEWS", headline="Replay",
+                    body="body", score=3, published=990.0, at=1001.0,
+                ))
+                self.assertFalse(store.record_alert(
+                    item_key="undated", source="NEWS", headline="Unknown time",
+                    body="body", score=3, published=None, at=1002.0,
+                ))
+                self.assertTrue(store.record_alert(
+                    item_key="fresh", source="NEWS", headline="New",
+                    body="body", score=3, published=1001.0, at=1003.0,
+                ))
+                self.assertEqual(2, store.unread_alert_count())
+                rows = {item.item_key: item for item in store.recent_alerts()}
+                self.assertTrue(rows["existing"].unread)
+                self.assertFalse(rows["replayed"].unread)
+                self.assertFalse(rows["undated"].unread)
+                self.assertTrue(rows["fresh"].unread)
+            finally:
+                store.close()
+
+            # A second process has a new cutoff, not a saved first-run flag.
+            reopened = StateStore(path)
+            try:
+                reopened.begin_notification_session(started_at=2000.0)
+                self.assertFalse(reopened.record_alert(
+                    item_key="second-replay", source="NEWS", headline="Old again",
+                    body="body", score=3, published=1999.0, at=2001.0,
+                ))
+                self.assertTrue(reopened.record_alert(
+                    item_key="second-new", source="NEWS", headline="New again",
+                    body="body", score=3, published=2001.0, at=2002.0,
+                ))
+                self.assertEqual(3, reopened.unread_alert_count())
+            finally:
+                reopened.close()
+
     def test_existing_oversized_alert_history_is_trimmed_on_open(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "state.db"

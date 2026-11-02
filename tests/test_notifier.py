@@ -15,7 +15,7 @@ class NotifierTests(unittest.TestCase):
         with (patch.object(notifier.os, 'name', 'nt'),
               patch.object(notifier, '_windows_toaster', return_value=toaster),
               patch.object(notifier, '_click_url', return_value='http://127.0.0.1:12345/alerts/token') as register):
-            accepted = notifier.notify('Trade Alert', 'Test', **kwargs)
+            accepted = notifier.notify('Trade Alert', 'Test', coalesce=False, **kwargs)
         return accepted, toaster.show_toast.call_args.args[0], register
 
     def test_standard_web_activation_and_stable_identity(self):
@@ -71,6 +71,77 @@ class NotifierTests(unittest.TestCase):
                       'https://a.test:8443/x'):
             with self.subTest(value=value):
                 self.assertIsNone(normalize_news_link(value))
+
+
+class NotificationBurstTests(unittest.TestCase):
+    def test_latest_published_across_sources_is_the_only_toast(self):
+        batch = notifier._NotificationBurst()
+        with (
+            patch.object(notifier.threading, "Timer") as factory,
+            patch.object(notifier, "_notify_now", return_value=True) as send,
+        ):
+            for number in range(12):
+                batch.offer(notifier._PendingNotification(
+                    "Trade Alert", str(number), f"event-{number}",
+                    None, 100.0 + number,
+                ))
+            self.assertEqual(1, factory.call_count)
+            send.assert_not_called()
+            batch.flush()
+            send.assert_called_once_with(
+                "Trade Alert", "11", item_key="event-11", on_click=None,
+            )
+            self.assertEqual(1, factory.return_value.start.call_count)
+
+    def test_cross_source_latest_publication_wins_over_latest_arrival(self):
+        batch = notifier._NotificationBurst()
+        with (
+            patch.object(notifier.threading, "Timer"),
+            patch.object(notifier, "_notify_now", return_value=True) as send,
+        ):
+            batch.offer(notifier._PendingNotification("DTV", "latest", "newer", None, 200.0))
+            batch.offer(notifier._PendingNotification("RSS", "older", "older", None, 100.0))
+            batch.flush()
+            send.assert_called_once_with(
+                "DTV", "latest", item_key="newer", on_click=None,
+            )
+
+    def test_cooldown_collects_next_burst_without_repeated_toasts(self):
+        batch = notifier._NotificationBurst()
+        with (
+            patch.object(notifier.threading, "Timer") as timer,
+            patch.object(notifier, "_notify_now", return_value=True) as send,
+        ):
+            batch.offer(notifier._PendingNotification("One", "first", "a", None, 100.0))
+            batch.flush()
+            batch.offer(notifier._PendingNotification("Two", "second", "b", None, 200.0))
+            batch.offer(notifier._PendingNotification("Three", "third", "c", None, 300.0))
+            self.assertEqual(2, timer.call_count)
+            self.assertGreater(timer.call_args.args[0], notifier.BURST_COLLECT_SECONDS)
+            self.assertEqual(1, send.call_count)
+            batch.flush()
+            self.assertEqual(2, send.call_count)
+            self.assertEqual("c", send.call_args.kwargs["item_key"])
+
+    def test_explicit_test_notification_bypasses_queue_and_discard_cancels(self):
+        with (
+            patch.object(notifier, "_burst") as burst,
+            patch.object(notifier, "_notify_now", return_value=True) as immediate,
+        ):
+            self.assertTrue(notifier.notify("Trade Alert", "Test"))
+            immediate.assert_called_once()
+            burst.offer.assert_not_called()
+        batch = notifier._NotificationBurst()
+        with (
+            patch.object(notifier.threading, "Timer") as factory,
+            patch.object(notifier, "_notify_now") as send,
+        ):
+            batch.offer(notifier._PendingNotification("One", "text", "key", None, 200.0))
+            batch.discard()
+            batch.flush()
+            factory.return_value.cancel.assert_called()
+            send.assert_not_called()
+
 
 
 class ClickListenerTests(unittest.TestCase):

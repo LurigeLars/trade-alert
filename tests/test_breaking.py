@@ -111,11 +111,8 @@ class IndependentBreakingLoop(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp)
             store = StateStore(path / "state.db")
-            now = time.time()
-            event = record(now)
             inbox = path / "breaking"
             inbox.mkdir()
-            (inbox / "incoming.json").write_text(json.dumps(event))
             cfg = Config(breaking_inbox_enabled=True, breaking_poll_seconds=0.2,
                          breaking_authorized_sources=(TRUTH_SOURCE,),
                          truth_direct_enabled=False)
@@ -133,6 +130,11 @@ class IndependentBreakingLoop(unittest.IsolatedAsyncioTestCase):
                      patch("trade_alert.breaking.notify",
                            side_effect=lambda t,b,**kwargs: notifications.append(b) or True):
                     task = asyncio.create_task(run_loop(cfg, store, stop_event=stop))
+                    # This is a live event *after* the session cutoff, not startup replay.
+                    await asyncio.sleep(0.05)
+                    event = record(time.time())
+                    event["published_at"] = datetime.now(timezone.utc).isoformat()
+                    (inbox / "incoming.json").write_text(json.dumps(event))
                     await asyncio.sleep(0.55)
                     stop.set()
                     task.cancel()

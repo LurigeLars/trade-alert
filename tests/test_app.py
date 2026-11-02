@@ -148,6 +148,43 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 store.close()
 
+    async def test_restart_replay_is_archived_without_windows_toasts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            try:
+                # The old initialization flags must not permit replay on restart.
+                store.mark_initialized()
+                store.set_meta("dtv_news_flow_initialized_at", "2026-10-01T00:00:00+00:00")
+                now = time.time()
+                store.begin_notification_session(started_at=now - 30)
+                replay = Headline(
+                    source="DTV_NEWS_FLOW", item_id="missed-before-restart",
+                    title="Oil supply disruption from before startup",
+                    published=now - 120, provider="Reuters",
+                )
+                live = Headline(
+                    source="DTV_NEWS_FLOW", item_id="after-restart",
+                    title="Oil supply disruption published after startup",
+                    published=now - 5, provider="Reuters",
+                )
+                with (
+                    patch("trade_alert.app._collect", new=AsyncMock(
+                        return_value=([replay, live], True, False, True),
+                    )),
+                    patch("trade_alert.app.notify", return_value=True) as sender,
+                ):
+                    result = await run_once(Config(), store, include_official=False)
+                self.assertEqual(1, result["notified"])
+                sender.assert_called_once()
+                self.assertEqual(live.key, sender.call_args.kwargs["item_key"])
+                records = {record.item_key: record for record in store.recent_alerts()}
+                self.assertFalse(records[replay.key].unread)
+                self.assertTrue(records[live.key].unread)
+                self.assertTrue(store.seen(replay.key))
+                self.assertTrue(store.seen(live.key))
+            finally:
+                store.close()
+
     async def test_notification_backend_failure_still_leaves_unread_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StateStore(pathlib.Path(tmp) / "state.db")

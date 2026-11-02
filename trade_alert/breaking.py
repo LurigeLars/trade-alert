@@ -158,6 +158,7 @@ def poll_breaking_inbox(
                 send = notification or (lambda title, text: notify(
                     title, text, item_key=key,
                     on_click=alert_click(store.path, key, alert_callback),
+                    published_at=parsed["published"],
                 ))
                 if send("Trade Alert · POLICY", body):
                     stats["notified"] += 1
