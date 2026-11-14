@@ -27,5 +27,14 @@
   "truth_direct_max_age_seconds": 300,
   "chrome_bridge_enabled": false,
   "chrome_bridge_poll_seconds": 1,
-  "chrome_bridge_max_age_seconds": 300
+  "chrome_bridge_max_age_seconds": 300,
+  "oil_watch_enabled": true,
+  "watches": [
+    {
+      "name": "Microsoft",
+      "keywords": ["Microsoft", "MSFT"],
+      "symbols": ["NASDAQ:MSFT"],
+      "enabled": false
+    }
+  ]
 }

@@ -6,9 +6,11 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any, Iterable
 from urllib.parse import unquote, urlsplit
 
+from .config import Watch
 from .mcp_client import MCPToolError, call_json_tool
 
 
@@ -281,6 +283,25 @@ def relevance_score(item: Headline) -> int:
     if item.urgency == 1 and (core or routed):
         score += 1
     return score
+
+
+@lru_cache(maxsize=512)
+def _keyword_pattern(keyword: str) -> re.Pattern[str]:
+    # Whole-word, case-insensitive; "MSFT" must not match inside "MSFTX".
+    return re.compile(r"(?<!\w)" + re.escape(keyword.strip()) + r"(?!\w)", re.IGNORECASE)
+
+
+def matching_watches(item: Headline, watches: Iterable[Watch]) -> tuple[str, ...]:
+    """Names of the enabled user watches whose keyword is in the headline or symbol is related."""
+    related = set(item.related_symbols)
+    return tuple(
+        watch.name
+        for watch in watches
+        if watch.enabled and (
+            any(_keyword_pattern(word).search(item.title) for word in watch.keywords)
+            or related.intersection(watch.symbols)
+        )
+    )
 
 
 async def resolve_dtv_watchlist(*, url: str, configured_id: str | None = None) -> DTVWatchlistContext:

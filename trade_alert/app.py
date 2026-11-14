@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import logging
 import os
 import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-from .config import Config, app_dir
+from .config import Config, ConfigReloader, app_dir
 from .breaking import poll_breaking_inbox
 from .truth_rss import RSSUnavailable, read_rss_once
 from .truth_direct import DirectUnavailable, fetch_public_statuses, read_direct_once
@@ -23,6 +24,7 @@ from .news import (
     Headline,
     fetch_dtv_news,
     fetch_official_news,
+    matching_watches,
     relevance_score,
     resolve_dtv_watchlist,
 )
@@ -46,11 +48,17 @@ def _setup_logging(verbose: bool = False) -> None:
     )
 
 
-def _notification(item: Headline, score: int) -> tuple[str, str]:
+def _notification(
+    item: Headline, score: int, watches: tuple[str, ...] = (), *, oil_hit: bool = True,
+) -> tuple[str, str]:
     provider = item.provider or item.source
-    title = f"Trade Alert · {provider}"
+    label = ", ".join(watches) if watches and not oil_hit else provider
+    title = f"Trade Alert · {label}"
     urgency = "TOP · " if item.urgency == 1 else ""
-    body = f"{urgency}{item.title}\nPublicerad {item.published_label()} · relevans {score}"
+    reasons = [f"relevans {score}"] if oil_hit else []
+    if watches:
+        reasons.append("bevakning " + ", ".join(watches))
+    body = f"{urgency}{item.title}\nPublicerad {item.published_label()} · {' · '.join(reasons)}"
     return title, body
 
 
@@ -188,7 +196,9 @@ async def run_once(
         if store.seen(item.key) or store.seen_item(item.dedupe_key):
             continue
         fresh += 1
-        score = relevance_score(item)
+        score = relevance_score(item) if config.oil_watch_enabled else 0
+        oil_hit = config.oil_watch_enabled and score >= config.notification_min_score
+        watches = matching_watches(item, config.watches)
         age = item.age_seconds
         source_is_initializing = first_cycle or (
             item.source == "DTV_NEWS_FLOW" and dtv_first_cycle
@@ -196,8 +206,8 @@ async def run_once(
         baseline_old = source_is_initializing and (
             age is None or age > config.startup_fresh_seconds
         )
-        if score >= config.notification_min_score and not baseline_old:
-            title, body = _notification(item, score)
+        if (oil_hit or watches) and not baseline_old:
+            title, body = _notification(item, score, watches, oil_hit=oil_hit)
             inserted = store.record_alert(
                 item_key=item.key,
                 source=item.source,
@@ -295,11 +305,14 @@ async def _run_news_loop(
     pause_event=None,
     status_callback=None,
     alert_callback=None,
+    reloader: ConfigReloader | None = None,
 ) -> None:
     next_official = 0.0
     last_official_ok = False
 
     while stop_event is None or not stop_event.is_set():
+        if reloader is not None:
+            reloader.poll()
         if pause_event is not None and pause_event.is_set():
             if status_callback is not None:
                 status_callback("Pausad", "paused")
@@ -520,14 +533,18 @@ async def _run_chrome_bridge_loop(
     pause_event=None, alert_callback=None,
 ) -> None:
     server = None
+    receiver_tried = False
     try:
-        try:
-            server, _ = start_chrome_receiver()
-        except OSError:
-            # Keep the legacy local-file scanner and other news adapters
-            # healthy if another process owns the port; never bind to LAN.
-            logging.exception("Chrome loopback receiver unavailable")
         while stop_event is None or not stop_event.is_set():
+            # Bind only once the source is switched on; it stays bound if later switched off.
+            if config.chrome_bridge_enabled and not receiver_tried:
+                receiver_tried = True
+                try:
+                    server, _ = start_chrome_receiver()
+                except OSError:
+                    # Keep the legacy local-file scanner and other news adapters
+                    # healthy if another process owns the port; never bind to LAN.
+                    logging.exception("Chrome loopback receiver unavailable")
             if pause_event is None or not pause_event.is_set():
                 try:
                     stats = poll_browser_feed(
@@ -551,17 +568,9 @@ async def run_loop(
     pause_event=None,
     status_callback=None,
     alert_callback=None,
+    reloader: ConfigReloader | None = None,
 ) -> None:
     store.begin_notification_session()
-    if not (config.breaking_inbox_enabled or config.truth_rss_enabled
-            or config.truth_direct_enabled or config.chrome_bridge_enabled
-            or config.market_correlation_enabled
-            or config.market_correlation_auto_enable_resident):
-        await _run_news_loop(
-            config, store, stop_event=stop_event, pause_event=pause_event,
-            status_callback=status_callback, alert_callback=alert_callback,
-        )
-        return
     workers = []
     if config.market_correlation_enabled or config.market_correlation_auto_enable_resident:
         workers.append(asyncio.create_task(
@@ -577,23 +586,11 @@ async def run_loop(
                 alert_callback=alert_callback,
             )
         ))
-    if config.chrome_bridge_enabled:
+    # Always started: each loop checks its *_enabled flag every round, so the
+    # settings window and remote config edits can switch sources on and off live.
+    for loop in (_run_chrome_bridge_loop, _run_truth_direct_loop, _run_truth_rss_loop):
         workers.append(asyncio.create_task(
-            _run_chrome_bridge_loop(
-                config, store, stop_event=stop_event, pause_event=pause_event,
-                alert_callback=alert_callback,
-            )
-        ))
-    if config.truth_direct_enabled:
-        workers.append(asyncio.create_task(
-            _run_truth_direct_loop(
-                config, store, stop_event=stop_event, pause_event=pause_event,
-                alert_callback=alert_callback,
-            )
-        ))
-    if config.truth_rss_enabled:
-        workers.append(asyncio.create_task(
-            _run_truth_rss_loop(
+            loop(
                 config, store, stop_event=stop_event, pause_event=pause_event,
                 alert_callback=alert_callback,
             )
@@ -602,6 +599,7 @@ async def run_loop(
         await _run_news_loop(
             config, store, stop_event=stop_event, pause_event=pause_event,
             status_callback=status_callback, alert_callback=alert_callback,
+            reloader=reloader,
         )
     finally:
         for worker in workers:
@@ -679,16 +677,17 @@ def main() -> None:
     finally:
         store.close()
 
+    monitor = functools.partial(run_loop, reloader=ConfigReloader(config))
     if os.name == "nt" and not args.no_tray:
         from .tray import run_tray
         try:
-            run_tray(config, run_loop, LOG_PATH, notify)
+            run_tray(config, monitor, LOG_PATH, notify)
         finally:
             discard_pending_notifications()
     else:
         foreground_store = StateStore()
         try:
-            asyncio.run(run_loop(config, foreground_store))
+            asyncio.run(monitor(config, foreground_store))
         finally:
             discard_pending_notifications()
             foreground_store.close()

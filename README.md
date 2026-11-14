@@ -189,6 +189,23 @@ On the first News Flow activation, older headlines are baselined so an upgrade d
 
 Truth Social image OCR also recognizes tightly scoped geopolitical naval phrases such as `IRANIAN SHIPS`, even when the demonym occurs without the literal place name `Iran`. An account-posted comparison graphic (for example `Other Presidents / Trump`) is a **STANDARD contextual alert**, not verified evidence of a newly sunk vessel. On OCR failures, fresh image-dependent direct/Chrome posts are deferred for 60 seconds instead of being permanently marked seen; relevant caption-only actions are still delivered immediately. Retries stop at the configured source freshness limit (typically 300 seconds). This cannot recover a post already marked seen by an older running process or a post never received from its source.
 
+## User watches and live settings
+
+Besides the built-in oil rules, News Flow headlines can be matched against **user watches**. A watch has a name, keywords and exact `EXCHANGE:SYMBOL` symbols. It alerts when a keyword occurs as a whole word in the headline (case-insensitive; `MSFT` does not match `MSFTX`) or when the provider lists one of its symbols as related. The toast title then names the watch, for example `Trade Alert · Microsoft`. Watches only see what News Flow returns, which is the news for the symbols in the pinned TradingView watchlist; add a company's symbol to that list in TradingView before watching it.
+
+`oil_watch_enabled` switches the built-in oil rules off without touching the user watches.
+
+**Inställningar…** in the tray menu shows the pinned watchlist and lets you switch the oil rules, Truth RSS, Chrome bridge and direct Truth Social on or off, and add, edit, switch or remove watches. **Spara** validates everything first and writes `config.json` atomically; invalid input is refused with a message and nothing changes.
+
+Settings apply **without a restart**. The running app re-reads `config.json` each News Flow cycle (default 20 s) when its modification time changes, so the file can also be edited remotely, for example by an assistant. An invalid edit is ignored with an `ERROR` log line and the app keeps its last valid settings. Source switches take effect on the source's next round; the Chrome loopback receiver binds the first time the bridge is switched on and stays bound until the app exits.
+
+```json
+"oil_watch_enabled": true,
+"watches": [
+  {"name": "Microsoft", "keywords": ["Microsoft", "MSFT", "Azure"], "symbols": ["NASDAQ:MSFT"], "enabled": true}
+]
+```
+
 ## Tray UI
 
 The tray menu exposes:
@@ -196,6 +213,7 @@ The tray menu exposes:
 - current source health.
 - **Latest alerts** / unread count; left-clicking the tray icon opens this view directly.
 - **What is monitored?** for the effective routing/profile configuration.
+- **Inställningar…** to switch sources on/off and manage your own watches (see below).
 - pause/resume.
 - test notification.
 - log-folder shortcut.
@@ -304,6 +322,8 @@ Important settings include:
 | `chrome_bridge_enabled` | Enable local Chrome download-file reader (off by default) |
 | `chrome_bridge_poll_seconds` | Local file scan cadence (default 1 second) |
 | `chrome_bridge_max_age_seconds` | Maximum age for new Chrome relay alerts |
+| `oil_watch_enabled` | Built-in oil relevance rules on/off (default on) |
+| `watches` | User watches: `name`, `keywords`, `symbols`, `enabled`; at most 50 watches with 50 keywords and 50 symbols each |
 
 Local SQLite stores seen-headline dedupe, source cursors, locally resolved watchlist metadata and unread alert history.
 

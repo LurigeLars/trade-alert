@@ -1,12 +1,56 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 
 DEFAULT_OFFICIAL_SYMBOLS = ()  # Official TradingView retired by user request.
+MAX_WATCHES = 50
+MAX_WATCH_TERMS = 50
+
+
+@dataclass(frozen=True, slots=True)
+class Watch:
+    """User-defined News Flow watch: alert when a headline matches a keyword or symbol."""
+
+    name: str
+    keywords: tuple[str, ...] = ()
+    symbols: tuple[str, ...] = ()
+    enabled: bool = True
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "Watch":
+        if not isinstance(raw, dict):
+            raise ValueError("each watch must be an object")
+        unknown = set(raw) - {"name", "keywords", "symbols", "enabled"}
+        if unknown:
+            raise ValueError(f"unknown watch fields: {', '.join(sorted(unknown))}")
+        return cls(
+            name=raw.get("name", ""),
+            keywords=tuple(raw.get("keywords") or ()),
+            symbols=tuple(raw.get("symbols") or ()),
+            enabled=raw.get("enabled", True),
+        )
+
+    def validate(self) -> None:
+        if not isinstance(self.name, str) or not 1 <= len(self.name.strip()) <= 80:
+            raise ValueError("watch name must be 1-80 characters")
+        if not isinstance(self.enabled, bool):
+            raise ValueError(f"watch {self.name}: enabled must be boolean")
+        if not self.keywords and not self.symbols:
+            raise ValueError(f"watch {self.name}: needs at least one keyword or symbol")
+        if len(self.keywords) > MAX_WATCH_TERMS or len(self.symbols) > MAX_WATCH_TERMS:
+            raise ValueError(f"watch {self.name}: at most {MAX_WATCH_TERMS} keywords and symbols")
+        for word in self.keywords:
+            if not isinstance(word, str) or not 1 <= len(word.strip()) <= 80:
+                raise ValueError(f"watch {self.name}: keywords must be 1-80 characters")
+        for symbol in self.symbols:
+            if (not isinstance(symbol, str) or ":" not in symbol or len(symbol) > 128
+                    or any(c.isspace() for c in symbol)):
+                raise ValueError(f"watch {self.name}: symbols must be exact EXCHANGE:SYMBOL")
 
 
 def app_dir() -> Path:
@@ -55,6 +99,9 @@ class Config:
     market_correlation_max_age_seconds: int = 180
     market_correlation_poll_seconds: float = 10.0
     market_correlation_auto_enable_resident: bool = True
+    # The built-in oil relevance rules; user watches below are matched in addition.
+    oil_watch_enabled: bool = True
+    watches: tuple[Watch, ...] = ()
 
     @classmethod
     def load(cls, path: Path | None = None) -> "Config":
@@ -87,6 +134,10 @@ class Config:
             raw["breaking_authorized_sources"] = tuple(raw["breaking_authorized_sources"])
         if "market_correlation_authorized_sources" in raw:
             raw["market_correlation_authorized_sources"] = tuple(raw["market_correlation_authorized_sources"])
+        if "watches" in raw:
+            if not isinstance(raw["watches"], list):
+                raise ValueError("watches must be a list")
+            raw["watches"] = tuple(Watch.from_dict(item) for item in raw["watches"])
         config = cls(**raw)
         config.validate()
         if migrated:
@@ -162,6 +213,20 @@ class Config:
         for symbol in self.official_symbols:
             if not symbol or len(symbol) > 128:
                 raise ValueError("official_symbols contains an invalid symbol")
+        if not isinstance(self.oil_watch_enabled, bool):
+            raise ValueError("oil_watch_enabled must be boolean")
+        if len(self.watches) > MAX_WATCHES:
+            raise ValueError(f"at most {MAX_WATCHES} watches")
+        names = [watch.name.strip().casefold() for watch in self.watches]
+        if len(names) != len(set(names)):
+            raise ValueError("watch names must be unique")
+        for watch in self.watches:
+            watch.validate()
+
+    def update_from(self, other: "Config") -> None:
+        """Apply a freshly loaded config to this shared instance, so running workers see it."""
+        for field in fields(self):
+            setattr(self, field.name, getattr(other, field.name))
 
     def save(self, path: Path | None = None) -> Path:
         self.validate()
@@ -171,5 +236,39 @@ class Config:
         payload["official_symbols"] = list(self.official_symbols)
         payload["breaking_authorized_sources"] = list(self.breaking_authorized_sources)
         payload["market_correlation_authorized_sources"] = list(self.market_correlation_authorized_sources)
-        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        # Write then rename, so a reader never sees a half-written file.
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
         return path
+
+
+class ConfigReloader:
+    """Re-reads config.json when it changes on disk (settings window or a remote edit)."""
+
+    def __init__(self, config: Config, path: Path | None = None):
+        self.config = config
+        self.path = path or app_dir() / "config.json"
+        self._mtime = self._stat()
+
+    def _stat(self) -> float | None:
+        try:
+            return self.path.stat().st_mtime
+        except OSError:
+            return None
+
+    def poll(self) -> bool:
+        mtime = self._stat()
+        if mtime is None or mtime == self._mtime:
+            return False
+        self._mtime = mtime
+        try:
+            fresh = Config.load(self.path)
+        except (OSError, ValueError, TypeError) as exc:
+            # Keep running on the last valid settings; the log says why the edit was refused.
+            logging.error("config.json change ignored, keeping previous settings: %s", exc)
+            return False
+        self.config.update_from(fresh)
+        self._mtime = self._stat()
+        logging.info("config.json reloaded")
+        return True
