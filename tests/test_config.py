@@ -3,7 +3,7 @@ import pathlib
 import tempfile
 import unittest
 
-from trade_alert.config import Config
+from trade_alert.config import RETIRED_KEYS, Config
 
 
 class ConfigTests(unittest.TestCase):
@@ -22,27 +22,30 @@ class ConfigTests(unittest.TestCase):
             config = Config.load(path)
             self.assertEqual("system", config.theme_mode)
 
-    def test_legacy_max_headlines_migrates_to_split_limits(self):
+    def test_settings_of_removed_features_are_dropped_and_file_rewritten(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "config.json"
             path.write_text(
                 json.dumps(
                     {
                         "profile_name": "Oil / Brent",
-                        "official_symbols": ["ICEEUR:BRN1!"],
                         "max_headlines": 25,
+                        "trade_spine_url": "http://127.0.0.1:8773/mcp",
+                        "official_symbols": ["ICEEUR:BRN1!"],
+                        "breaking_inbox_enabled": True,
+                        "breaking_authorized_sources": [],
+                        "market_correlation_enabled": True,
+                        "market_correlation_auto_enable_resident": True,
+                        "truth_direct_enabled": False,
                     }
                 ),
                 encoding="utf-8",
             )
             config = Config.load(path)
-            self.assertEqual(200, config.dtv_max_headlines)
-            self.assertEqual(25, config.official_max_headlines)
-
+            self.assertFalse(config.truth_direct_enabled)
             migrated = json.loads(path.read_text(encoding="utf-8"))
-            self.assertNotIn("max_headlines", migrated)
-            self.assertEqual(200, migrated["dtv_max_headlines"])
-            self.assertEqual(25, migrated["official_max_headlines"])
+            self.assertFalse(RETIRED_KEYS.intersection(migrated))
+            self.assertFalse(migrated["truth_direct_enabled"])
 
     def test_existing_config_adds_news_flow_replay_overlap(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -60,39 +63,6 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(3600, config.dtv_replay_overlap_seconds)
             migrated = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(3600, migrated["dtv_replay_overlap_seconds"])
-
-    def test_legacy_default_official_symbols_are_retired(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = pathlib.Path(tmp) / "config.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "profile_name": "Oil / Brent",
-                        "official_symbols": ["ICEEUR:BRN1!"],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            config = Config.load(path)
-            self.assertEqual((), config.official_symbols)
-
-            migrated = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual([], migrated["official_symbols"])
-
-    def test_custom_official_symbols_are_not_rewritten(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = pathlib.Path(tmp) / "config.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "profile_name": "Custom",
-                        "official_symbols": ["ICEEUR:BRN1!"],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            config = Config.load(path)
-            self.assertEqual(("ICEEUR:BRN1!",), config.official_symbols)
 
     def test_theme_mode_round_trips(self):
         with tempfile.TemporaryDirectory() as tmp:

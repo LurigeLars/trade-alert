@@ -4,41 +4,40 @@ import argparse
 import asyncio
 import functools
 import logging
+import logging.handlers
 import os
 import sys
 import time
 from datetime import datetime, timedelta, timezone
 
 from .config import Config, ConfigReloader, app_dir
-from .breaking import poll_breaking_inbox
 from .truth_rss import RSSUnavailable, read_rss_once
 from .truth_direct import DirectUnavailable, fetch_public_statuses, read_direct_once
 from .chrome_feed import poll_browser_feed
 from .chrome_receiver import start_chrome_receiver
 from .mcp_client import MCPToolError
-from .market_correlation import process_market_incidents
-from .market_price import StaleResidentPriceError, activate_if_resident, collect_resident_events
-from .market_evidence import cache_headlines, cached_headlines, reconcile_incidents
 from .news import (
     DTVWatchlistContext,
     Headline,
     fetch_dtv_news,
-    fetch_official_news,
     matching_watches,
     relevance_score,
     resolve_dtv_watchlist,
 )
-from .notifier import alert_click, notify, flush_pending_notifications, discard_pending_notifications
+from .notifier import deliver_alert, notify, flush_pending_notifications, discard_pending_notifications
 from .state import StateStore
 from .windows_ui import configure_windows_app_identity, configure_windows_dpi_awareness
 
 LOG_PATH = app_dir() / "trade-alert.log"
-OFFICIAL_TRADINGVIEW_DISABLED = True  # User-requested hard stop, including legacy configs.
+LOG_MAX_BYTES = 10_000_000
+LOG_BACKUPS = 3
 
 
 def _setup_logging(verbose: bool = False) -> None:
     app_dir().mkdir(parents=True, exist_ok=True)
-    handlers: list[logging.Handler] = [logging.FileHandler(LOG_PATH, encoding="utf-8")]
+    handlers: list[logging.Handler] = [logging.handlers.RotatingFileHandler(
+        LOG_PATH, maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUPS, encoding="utf-8",
+    )]
     if sys.stderr is not None:
         handlers.append(logging.StreamHandler())
     logging.basicConfig(
@@ -46,6 +45,9 @@ def _setup_logging(verbose: bool = False) -> None:
         format="%(asctime)s %(levelname)s %(message)s",
         handlers=handlers,
     )
+    # Every MCP call logs several INFO lines (93% of the old log); keep only their problems.
+    for noisy in ("httpx", "httpx2", "mcp"):  # mcp 2.x ships its HTTP client as httpx2
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def _notification(
@@ -113,13 +115,11 @@ async def _collect(
     config: Config,
     store: StateStore,
     *,
-    include_official: bool,
     dtv_since: str | None,
-) -> tuple[list[Headline], bool, bool, bool]:
+) -> tuple[list[Headline], bool, bool]:
     items: list[Headline] = []
     dtv_ok = False
     dtv_fetched = False
-    official_ok = False
 
     try:
         context = await _resolve_dtv_context(config, store)
@@ -141,31 +141,16 @@ async def _collect(
     except MCPToolError as exc:
         logging.warning("DTV News Flow unavailable: %s", exc)
 
-    if include_official and not OFFICIAL_TRADINGVIEW_DISABLED:
-        for symbol in config.official_symbols:
-            try:
-                items.extend(
-                    await fetch_official_news(
-                        url=config.trade_spine_url,
-                        symbol=symbol,
-                        limit=config.official_max_headlines,
-                    )
-                )
-                official_ok = True
-            except MCPToolError as exc:
-                logging.warning("Official TradingView news unavailable for %s: %s", symbol, exc)
-
     deduped: dict[str, Headline] = {}
     for item in items:
         deduped[item.key] = item
-    return list(deduped.values()), dtv_ok, official_ok, dtv_fetched
+    return list(deduped.values()), dtv_ok, dtv_fetched
 
 
 async def run_once(
     config: Config,
     store: StateStore,
     *,
-    include_official: bool = True,
     alert_callback=None,
 ) -> dict:
     first_cycle = not store.initialized()
@@ -174,12 +159,7 @@ async def run_once(
         store.get_meta("dtv_last_success"),
         config.dtv_replay_overlap_seconds,
     )
-    items, dtv_ok, official_ok, dtv_fetched = await _collect(
-        config,
-        store,
-        include_official=include_official,
-        dtv_since=dtv_since,
-    )
+    items, dtv_ok, dtv_fetched = await _collect(config, store, dtv_since=dtv_since)
     now = time.time()
     store.mark_source_observations(
         [
@@ -208,58 +188,22 @@ async def run_once(
         )
         if (oil_hit or watches) and not baseline_old:
             title, body = _notification(item, score, watches, oil_hit=oil_hit)
-            inserted = store.record_alert(
-                item_key=item.key,
-                source=item.source,
-                provider=item.provider,
-                headline=item.title,
-                body=body,
-                score=score,
-                published=item.published,
-                dedupe_key=item.dedupe_key,
-                link=item.link,
-                at=now,
+            alerted, sent = deliver_alert(
+                store, title=title, item_key=item.key, source=item.source,
+                provider=item.provider, headline=item.title, body=body, score=score,
+                published=item.published, dedupe_key=item.dedupe_key, link=item.link, at=now,
+                alert_callback=alert_callback, send=notify,
             )
-            if inserted:
-                dtv_first_seen = store.source_first_seen(
-                    item.dedupe_key,
-                    "DTV_NEWS_FLOW",
-                )
+            if alerted:
                 logging.info(
                     "news-latency provider=%r item_id=%r published=%s "
                     "dtv_first_seen=%s alert_registered=%s source=%s",
-                    item.provider,
-                    item.item_id,
-                    item.published,
-                    dtv_first_seen,
-                    now,
-                    item.source,
+                    item.provider, item.item_id, item.published,
+                    store.source_first_seen(item.dedupe_key, "DTV_NEWS_FLOW"), now, item.source,
                 )
-            if inserted and alert_callback is not None:
-                try:
-                    alert_callback(store.unread_alert_count())
-                except Exception:
-                    logging.exception("alert callback failed")
-            if inserted and notify(
-                title, body, item_key=item.key,
-                on_click=alert_click(store.path, item.key, alert_callback),
-                published_at=item.published,
-            ):
-                notified += 1
+            notified += sent
         store.mark_seen(item.key, at=now)
         store.mark_seen_item(item.dedupe_key, at=now)
-
-    # Market-data collection runs independently from the news path;
-    # news source outages must never block price detection.
-    market_evidence = {"cached": 0, "updated": 0, "notified": 0}
-    if config.market_correlation_enabled:
-        try:
-            market_evidence["cached"] = cache_headlines(store, items, now=now)
-            updates = reconcile_incidents(store, now=now, alert_callback=alert_callback)
-            market_evidence["updated"] = updates["updated"]
-            market_evidence["notified"] = updates["notified"]
-        except Exception:
-            logging.exception("cross-market news revision failed")
 
     if dtv_ok:
         store.set_meta("dtv_last_success", datetime.now(timezone.utc).isoformat())
@@ -269,23 +213,14 @@ async def run_once(
         store.mark_initialized()
     store.prune()
 
-    if include_official:
-        if not (dtv_ok or official_ok):
-            logging.error("All configured news sources failed")
-        elif not dtv_ok and official_ok:
-            logging.warning(
-                "Primary DTV News Flow is unavailable/incomplete; using Official TradingView fallback"
-            )
-    elif not dtv_ok:
-        logging.warning("Primary DTV News Flow failed on a News-Flow-only cycle")
+    if not dtv_ok:
+        logging.warning("DTV News Flow failed or returned an incomplete window this cycle")
 
     return {
         "fresh": fresh,
         "notified": notified,
         "dtv_ok": dtv_ok,
         "dtv_fetched": dtv_fetched,
-        "official_ok": official_ok,
-        "market_evidence": market_evidence,
     }
 
 
@@ -307,9 +242,6 @@ async def _run_news_loop(
     alert_callback=None,
     reloader: ConfigReloader | None = None,
 ) -> None:
-    next_official = 0.0
-    last_official_ok = False
-
     while stop_event is None or not stop_event.is_set():
         if reloader is not None:
             reloader.poll()
@@ -319,62 +251,15 @@ async def _run_news_loop(
             await _sleep_interruptible(0.5, stop_event)
             continue
 
-        now = time.monotonic()
-        include_official = not OFFICIAL_TRADINGVIEW_DISABLED and now >= next_official
         try:
-            result = await run_once(
-                config,
-                store,
-                include_official=include_official,
-                alert_callback=alert_callback,
-            )
-            if include_official:
-                last_official_ok = result["official_ok"]
+            result = await run_once(config, store, alert_callback=alert_callback)
             logging.info(
-                "cycle fresh=%s notified=%s dtv=%s official=%s",
-                result["fresh"],
-                result["notified"],
-                result["dtv_ok"],
-                result["official_ok"],
+                "cycle fresh=%s notified=%s dtv=%s",
+                result["fresh"], result["notified"], result["dtv_ok"],
             )
-
             if status_callback is not None:
-                if config.market_correlation_enabled:
-                    ok_since = store.get_meta("cross_market_price_last_ok")
-                    healthy = False
-                    if ok_since is not None:
-                        try:
-                            healthy = (time.time() - float(ok_since)
-                                       <= max(45, 3 * config.market_correlation_poll_seconds)
-                                       and store.get_meta("cross_market_price_status") == "ACTIVE")
-                        except ValueError:
-                            # Invalid health telemetry is treated as degraded (healthy stays False).
-                            pass
-                    if not healthy:
-                        # A responsive DTV feed with old prices is not a missing
-                        # feed. Both conditions still fail closed for alerts.
-                        if store.get_meta("cross_market_price_status") == "STALE":
-                            status_callback("Väntar på färska Brent/Nasdaq-priser", "waiting")
-                        else:
-                            status_callback("Degraderad · Brent/Nasdaq prisdata saknas", "waiting")
-                    elif OFFICIAL_TRADINGVIEW_DISABLED and result["dtv_ok"]:
-                        status_callback("Aktiv · Brent/Nasdaq + DTV News Flow", "ok")
-                    elif OFFICIAL_TRADINGVIEW_DISABLED:
-                        status_callback("Degraderad · DTV-nyheter saknas", "waiting")
-                    elif not (result["dtv_ok"] or last_official_ok):
-                        status_callback("Degraderad · marknadsnyheter saknas", "waiting")
-                    elif result["dtv_ok"] and last_official_ok:
-                        status_callback("Aktiv · Brent/Nasdaq + nyheter", "ok")
-                    else:
-                        status_callback("Aktiv · Brent/Nasdaq / nyhetsfallback", "ok")
-                elif result["dtv_ok"] and last_official_ok:
-                    status_callback("Aktiv · News Flow primär + Official TV", "ok")
-                elif result["dtv_ok"]:
-                    status_callback("Aktiv · News Flow primär", "ok")
-                elif last_official_ok:
-                    status_callback("Degraderad · Official TV fallback", "waiting")
-                elif include_official:
-                    status_callback("Källfel · se logg", "error")
+                if result["dtv_ok"]:
+                    status_callback("Aktiv · News Flow", "ok")
                 else:
                     status_callback("Källfel · News Flow", "error")
         except Exception:
@@ -382,97 +267,14 @@ async def _run_news_loop(
             if status_callback is not None:
                 status_callback("Fel · se logg", "error")
 
-        if include_official:
-            next_official = time.monotonic() + config.official_poll_seconds
         await _sleep_interruptible(config.poll_seconds, stop_event)
-
-
-async def _run_market_correlation_loop(
-    config: Config, store: StateStore, *, stop_event=None,
-    pause_event=None, alert_callback=None,
-) -> None:
-    """Independent ten-second DTV resident 1m detector.
-
-    Do not wait for the broad news collector, which can backfill late.
-    Enforce fail-closed freshness and visible source health.
-    """
-    while stop_event is None or not stop_event.is_set():
-        if pause_event is not None and pause_event.is_set():
-            await _sleep_interruptible(0.5, stop_event)
-            continue
-        try:
-            events = await collect_resident_events(config)
-            if events:
-                matches = process_market_incidents(
-                    config, store, cached_headlines(store),
-                    records=events, alert_callback=alert_callback,
-                )
-                if matches["accepted"] or matches["rejected"]:
-                    logging.info("cross-market minute shocks: %s", matches)
-            store.set_meta("cross_market_price_last_ok", str(time.time()))
-            store.set_meta("cross_market_price_status", "ACTIVE")
-            store.set_meta("cross_market_price_last_error", "")
-        except StaleResidentPriceError as exc:
-            store.set_meta("cross_market_price_status", "STALE")
-            store.set_meta("cross_market_price_last_error", str(exc)[:240])
-            logging.info("Brent/Nasdaq awaiting fresh resident prices: %s", exc)
-        except Exception as exc:
-            store.set_meta("cross_market_price_status", "DEGRADED")
-            store.set_meta("cross_market_price_last_error", str(exc)[:240])
-            logging.warning("Brent/Nasdaq realtime coverage degraded: %s", exc)
-        await _sleep_interruptible(config.market_correlation_poll_seconds, stop_event)
-
-
-async def _run_market_activation_loop(
-    config: Config, store: StateStore, *, stop_event=None,
-    pause_event=None, alert_callback=None,
-) -> None:
-    """Background-only worker autodetection; never hold up existing alerts."""
-    while stop_event is None or not stop_event.is_set():
-        if pause_event is not None and pause_event.is_set():
-            await _sleep_interruptible(0.5, stop_event)
-            continue
-        try:
-            if await activate_if_resident(config):
-                await _run_market_correlation_loop(
-                    config, store, stop_event=stop_event,
-                    pause_event=pause_event, alert_callback=alert_callback,
-                )
-                return
-        except Exception:
-            logging.exception("cross-market worker autodetection failed")
-        # DTV may come online after Windows startup; retry without touching
-        # any ordinary oil/news/policy intake work.
-        await _sleep_interruptible(120.0, stop_event)
-
-
-async def _run_breaking_loop(
-    config: Config,
-    store: StateStore,
-    *,
-    stop_event=None,
-    pause_event=None,
-    alert_callback=None,
-) -> None:
-    # Separate coroutine: not gated on TradingView or Trade Spine network requests.
-    while stop_event is None or not stop_event.is_set():
-        if pause_event is None or not pause_event.is_set():
-            try:
-                result = poll_breaking_inbox(
-                    config, store, alert_callback=alert_callback
-                )
-                if any(result.values()):
-                    logging.info("breaking-policy-inbox=%s", result)
-            except Exception:
-                logging.exception("breaking-policy-inbox failed")
-        await _sleep_interruptible(config.breaking_poll_seconds, stop_event)
 
 
 async def _run_truth_rss_loop(
     config: Config, store: StateStore, *, stop_event=None,
     pause_event=None, alert_callback=None,
 ) -> None:
-    # Separate bounded RSS fetch thread; independent of DTV and Trade Spine.
+    # Separate bounded RSS fetch thread; independent of DTV.
     error_streak = 0
     while stop_event is None or not stop_event.is_set():
         if pause_event is not None and pause_event.is_set():
@@ -572,20 +374,6 @@ async def run_loop(
 ) -> None:
     store.begin_notification_session()
     workers = []
-    if config.market_correlation_enabled or config.market_correlation_auto_enable_resident:
-        workers.append(asyncio.create_task(
-            _run_market_activation_loop(
-                config, store, stop_event=stop_event, pause_event=pause_event,
-                alert_callback=alert_callback,
-            )
-        ))
-    if config.breaking_inbox_enabled:
-        workers.append(asyncio.create_task(
-            _run_breaking_loop(
-                config, store, stop_event=stop_event, pause_event=pause_event,
-                alert_callback=alert_callback,
-            )
-        ))
     # Always started: each loop checks its *_enabled flag every round, so the
     # settings window and remote config edits can switch sources on and off live.
     for loop in (_run_chrome_bridge_loop, _run_truth_direct_loop, _run_truth_rss_loop):

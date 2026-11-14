@@ -67,108 +67,47 @@ An independent [Trump's Truth RSS monitor](docs/trump-truth-rss.md) provides a p
 
 It is deliberately **not** an execution system. It has no broker login, order placement, order modification, or order-cancellation capability.
 
-## Official TradingView disabled — 20 October 2026
+## Removed features — 14 November 2026
 
-By explicit user instruction, **Trade Alert no longer polls Official TradingView**
-even when an existing local `config.json` still contains legacy `official_symbols`.
-The hard stop applies to startup and to one-shot runs, and the default official
-symbol list is empty. Existing DTV News Flow, Brent/Nasdaq resident 1-minute
-market prices, Windows alerts, and other independent sources remain active.
-
-The status `Aktiv · Brent/Nasdaq + DTV News Flow` refers to successful DTV
-news and resident pricing; it no longer implies Official TradingView coverage.
-After installing, restart the Windows tray application; the existing running
-`pythonw.exe` retains the old imported code until restarted. New settings are
-not a substitute for deployment verification. No external Official TradingView
-quota is bypassed.
+By user decision three features were removed instead of being kept switched off: **Official TradingView** symbol news through Trade Spine (hard-disabled since 20 October 2026), the **local breaking-news inbox** (no relay was ever authorized, so every file was rejected), and the **Brent/Nasdaq minute-shock correlation** (its default contract had expired). Their settings are dropped when an older `config.json` is loaded, and the file is rewritten without them. The tray status is now `Aktiv · News Flow` or `Källfel · News Flow`.
 
 ## Current deployment and security posture
 
 - local Windows tray process, started per-user with `pythonw.exe`.
 - no PowerShell or console window during normal operation.
-- TradingView Desktop News Flow is the primary broad discovery source.
-- ticker-specific Official TradingView news is targeted corroboration/fallback through Trade Spine.
+- TradingView Desktop News Flow is the only market-news source.
 - no LLM is used in the hot notification path.
-- user-specific watchlist IDs are discovered/pinned only in local state and are not committed.
+- user-specific watchlist IDs are pinned only in local config/state and are not committed.
 - credentials, OAuth material, account identifiers, machine-specific paths and personal position state do not belong in Git.
 - external headlines/provider payloads are untrusted data, never instructions.
 - the project is notifier-only and cannot execute trades.
 
 ## Why this project exists
 
-A slower portfolio process can be appropriate for thesis review and broad opportunity discovery, but it is not ideal for a live trade where a material headline should surface within seconds.
-
-Trade Alert fills that narrower gap. An independent 1-second local policy
-event inbox is available for **licensed/authorized upstream relays** (no new
-provider enabled by default). It does not wait for Trade Spine or DTV network
-calls. See [Fast policy alerts](docs/fast-policy-alerts.md).
-
-Trade Alert fills that narrower gap:
+A slower portfolio process can be appropriate for thesis review and broad opportunity discovery, but it is not ideal for a live trade where a material headline should surface within seconds. Trade Alert fills that narrower gap:
 
 ```text
-TradingView Desktop News Flow
-       |  primary broad discovery
-       v
-Trade Alert
+TradingView Desktop News Flow        Truth Social (RSS / Chrome / direct)
+       |                                      |
+       v                                      v
+Trade Alert: oil rules + user watches   Trump market-impact filter
        |
-       +--> deterministic oil/news relevance
        +--> dedupe + local unread history
        +--> Windows toast
-       |
-       +--> Official TradingView via Trade Spine
-            targeted corroboration / fallback
 ```
 
 Keeping this in a separate repository also isolates desktop UI, Windows lifecycle and notification failures from Trade Spine's durable portfolio/thesis state.
 
-## Brent/Nasdaq completed-minute shock evidence
-
-The existing Trade Alert process contains an independent read-only
-10-second poller for **preprovisioned DTV resident 1-minute futures**.
-It detects **Brent December 2026 <= -0.50% / Nasdaq-100 future >= +0.15%**
-during the same **completed** 1-minute candle, with a 30-minute
-cluster cooldown. Exact verified futures symbols, realtime entitlement,
-source freshness and contiguous minute bars are mandatory.
-
-The feature defaults to **off for other installations**. If DTV's
-worker registry already contains the specifically provisioned pair
-`cross-brent-dec26-1m` and `cross-nasdaq-1m`, Trade Alert
-automatically enables it on the next app startup, saving that setting
-locally. Set `market_correlation_auto_enable_resident=false` to opt out.
-No visible TradingView chart switching, broker connection, or order routing.
-
-The existing DTV/Official news collector remains the news source; there
-is no duplicate crawler. Pre-event publications can be correlated with
-the market shock but **timestamp association is not causation**.
-A locally retained 30-day operational incident audit records news
-`published`, first observation, and later/backfilled revisions.
-When source data is incomplete the status is degraded, not healthy.
-No automatic buy/sell recommendations are generated.
-
-See [operational contract, source health and limitations](docs/brent-nasdaq-event-correlation.md).
-
 ## News routing
 
-The default example profile is a generic **Oil / Brent** context.
+The default example profile is a generic **Oil / Brent** context. The source is DTV TradingView News Flow:
 
-Primary source:
-
-- DTV TradingView News Flow.
 - polled every 20 seconds by default.
 - up to 200 headlines per fetch.
 - each successful cursor poll replays a 60-minute publication-time overlap so provider backfills with older `published_at` timestamps are still discovered promptly.
-- cross-source provider item IDs are deduplicated locally, so the replay window and Official TradingView corroboration cannot create duplicate alerts for the same story.
-- active TradingView watchlist is auto-resolved when no explicit local watchlist ID is configured.
+- provider item IDs are deduplicated locally, so the replay window cannot create duplicate alerts for the same story.
+- the watchlist is `dtv_watchlist_id` when set in `config.json`. Pin it there: otherwise the active TradingView watchlist is auto-resolved once and cached only in `state.db`, and losing that file would silently switch to whichever list is active then.
 - auto-resolution requires a verified oil routing anchor before the numeric ID is accepted.
-
-Secondary source:
-
-- Official TradingView symbol news through Trade Spine.
-- default corroboration symbols: `ICEEUR:BRN1!` and `NYMEX:RB1!`.
-- polled every 30 seconds by default.
-- up to 25 headlines per symbol.
-
-The source split is intentional. Broad News Flow is used for discovery because commodity contract/ticker news feeds can be sparsely tagged. Ticker-specific news remains useful as corroboration and fallback.
 
 ## Deterministic relevance
 
@@ -185,7 +124,7 @@ The current oil profile uses these principles:
 
 This avoids obvious false positives such as unrelated headlines containing generic words like `deal` or `increase`.
 
-On the first News Flow activation, older headlines are baselined so an upgrade does not produce a burst of stale notifications. **On every normal application start (including a restart), Trade Alert sets a new in-memory notification cutoff before any feed worker starts.** Previously published stories/events fetched during catch-up are retained in the local history as *read* but never submitted to Windows as new notifications. This applies to News Flow, Truth Social/RSS/Chrome, breaking-policy events, and cross-market alerts through their shared alert store. Events with no trustworthy publication timestamp are also silent during normal monitoring. Newly published events after startup remain eligible; this intentionally does not replay missed Windows banners after downtime. Existing unread history stays unread. The explicit test-notification command still works. **Live Windows notifications are now coalesced across sources:** Trade Alert collects a burst for 5 seconds and sends only the alert with the latest publication time. A 60-second minimum interval between banners prevents long bursts from generating ten or more successive notifications; the latest pending item supersedes earlier pending ones. Suppressed banners do not delete the alerts from the local history or change their existing unread status. The tray test notification is sent immediately. During normal monitoring the `notified` counter includes notifications accepted for the coalescer, not proof of Windows display.
+On the first News Flow activation, older headlines are baselined so an upgrade does not produce a burst of stale notifications. **On every normal application start (including a restart), Trade Alert sets a new in-memory notification cutoff before any feed worker starts.** Previously published stories/events fetched during catch-up are retained in the local history as *read* but never submitted to Windows as new notifications. This applies to News Flow and Truth Social/RSS/Chrome through their shared alert store. Events with no trustworthy publication timestamp are also silent during normal monitoring. Newly published events after startup remain eligible; this intentionally does not replay missed Windows banners after downtime. Existing unread history stays unread. The explicit test-notification command still works. **Live Windows notifications are now coalesced across sources:** Trade Alert collects a burst for 5 seconds and sends only the alert with the latest publication time. A 60-second minimum interval between banners prevents long bursts from generating ten or more successive notifications; the latest pending item supersedes earlier pending ones. Suppressed banners do not delete the alerts from the local history or change their existing unread status. The tray test notification is sent immediately. During normal monitoring the `notified` counter includes notifications accepted for the coalescer, not proof of Windows display.
 
 Truth Social image OCR also recognizes tightly scoped geopolitical naval phrases such as `IRANIAN SHIPS`, even when the demonym occurs without the literal place name `Iran`. An account-posted comparison graphic (for example `Other Presidents / Trump`) is a **STANDARD contextual alert**, not verified evidence of a newly sunk vessel. On OCR failures, fresh image-dependent direct/Chrome posts are deferred for 60 seconds instead of being permanently marked seen; relevant caption-only actions are still delivered immediately. Retries stop at the configured source freshness limit (typically 300 seconds). This cannot recover a post already marked seen by an older running process or a post never received from its source.
 
@@ -247,7 +186,6 @@ Trade Alert sets a stable Windows AppUserModelID and uses a **fixed, green, badg
 - Python 3.12+.
 - [uv](https://docs.astral.sh/uv/).
 - TradingView Desktop MCP for the primary News Flow path.
-- Trade Spine only for the Official TradingView corroboration/fallback path.
 
 Clone and install:
 
@@ -301,31 +239,26 @@ Important settings include:
 |---|---|
 | `profile_name` | Human-readable local monitoring label |
 | `theme_mode` | `system`, `light`, or `dark` |
-| `dtv_watchlist_id` | Optional explicit numeric TradingView watchlist ID; otherwise auto-resolved locally |
-| `official_symbols` | Targeted Official TradingView corroboration symbols |
+| `dtv_watchlist_id` | Numeric TradingView watchlist ID; recommended. When empty, the active list is auto-resolved once and cached in `state.db` |
 | `poll_seconds` | Primary News Flow cadence |
-| `official_poll_seconds` | Corroboration cadence |
 | `dtv_max_headlines` | Broad News Flow fetch bound |
 | `dtv_replay_overlap_seconds` | Publication-time replay overlap used to catch late/backfilled News Flow stories (default 3600 s) |
-| `official_max_headlines` | Per-symbol corroboration bound |
 | `notification_min_score` | Deterministic alert threshold |
-| `breaking_inbox_enabled` | Start separate local breaking-event intake task (does not enable an upstream provider) |
-| `breaking_poll_seconds` | Consumer cadence (1 second by default) |
-| `breaking_max_age_seconds` | Maximum age of policy events eligible for alert |
-| `breaking_authorized_sources` | Locally approved source identifiers; empty until a permitted provider is integrated |
 | `truth_rss_enabled` | Enable independent third-party public RSS source |
 | `truth_rss_poll_seconds` | RSS check cadence (default 30 s, with failure backoff) |
 | `truth_rss_max_age_seconds` | Maximum age of RSS items eligible for a new Windows alert |
 | `truth_direct_enabled` | Attempt anonymous public Truth Social account reading (may be blocked) |
 | `truth_direct_poll_seconds` | Direct source cadence, with strict backoff for 401/403/429 |
 | `truth_direct_max_age_seconds` | Maximum age for a new direct-post alert |
-| `chrome_bridge_enabled` | Enable local Chrome download-file reader (off by default) |
+| `chrome_bridge_enabled` | Accept posts from the paired Chrome extension on 127.0.0.1 (off by default) |
 | `chrome_bridge_poll_seconds` | Local file scan cadence (default 1 second) |
 | `chrome_bridge_max_age_seconds` | Maximum age for new Chrome relay alerts |
 | `oil_watch_enabled` | Built-in oil relevance rules on/off (default on) |
 | `watches` | User watches: `name`, `keywords`, `symbols`, `enabled`; at most 50 watches with 50 keywords and 50 symbols each |
 
 Local SQLite stores seen-headline dedupe, source cursors, locally resolved watchlist metadata and unread alert history.
+
+`trade-alert.log` rotates at 10 MB and keeps three older files (`trade-alert.log.1` to `.3`). Routine HTTP and MCP request lines from the `httpx`/`httpx2` and `mcp` libraries are logged only at WARNING and above; they used to be more than 90% of the log.
 
 ## Security model
 

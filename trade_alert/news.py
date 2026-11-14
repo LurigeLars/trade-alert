@@ -367,12 +367,3 @@ async def fetch_dtv_news(
         context=context,
         coverage_complete=coverage_complete,
     )
-
-
-async def fetch_official_news(*, url: str, symbol: str, limit: int) -> list[Headline]:
-    payload = await call_json_tool(
-        url,
-        "intelligence_state",
-        {"view": "TRADINGVIEW_NEWS", "symbol": symbol, "limit": limit, "offset": 0},
-    )
-    return normalize_headlines(payload, source=f"TV:{symbol}")

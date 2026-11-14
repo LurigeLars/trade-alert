@@ -21,7 +21,7 @@ from .config import Config
 from .trump_filter import classify_trump_statement
 from .event_evidence import assess_truth_evidence
 from .media_ocr import extract_image_text, image_url_from_post
-from .notifier import alert_click, notify
+from .notifier import deliver_alert, notify
 from .state import StateStore
 
 ACCOUNT_ID = "107780257626128497"
@@ -105,6 +105,13 @@ class _Text(HTMLParser):
             self.parts.append(" ")
 
 
+def html_to_text(markup: str, limit: int) -> str:
+    """Visible text of an HTML fragment; <br>, <p> and <div> become spaces, whitespace collapsed."""
+    parser = _Text()
+    parser.feed(markup[:32000])
+    return " ".join("".join(parser.parts).split())[:limit]
+
+
 @dataclass(frozen=True)
 class DirectPost:
     post_id: str
@@ -175,9 +182,7 @@ def parse_statuses(data: bytes, *, fetched_at: float) -> DirectResult:
         html = row.get("content")
         if not isinstance(html, str):
             continue
-        parser = _Text()
-        parser.feed(html[:32000])
-        text = " ".join("".join(parser.parts).split())[:3000]
+        text = html_to_text(html, 3000)
         media_only = not text and bool(row.get("media_attachments"))
         if not text and not media_only:
             continue
@@ -317,29 +322,15 @@ async def read_direct_once(config: Config, store: StateStore, *,
             f"Bedömning: {evidence.reason}\n"
             "Ett nytt inlägg är inte bevis på en ny händelse."
         )
-        inserted = store.record_alert(
-            item_key=key, source="TRUTH_PUBLIC",
-            provider="Truth Social public account",
+        alerted, sent = deliver_alert(
+            store, title=f"Trade Alert · Trump {signal.priority} · {signal.category}",
+            item_key=key, source="TRUTH_PUBLIC", provider="Truth Social public account",
             headline=analysis_text[:240], body=body, score=score,
             published=post.published, link=post.link, at=moment,
+            alert_callback=alert_callback, notification=notification, send=notify,
         )
-        if not inserted:
-            continue
-        emitted += 1
-        if alert_callback:
-            try:
-                alert_callback(store.unread_alert_count())
-            except Exception:
-                logging.exception("Direct-source unread callback failed")
-        send = notification or (lambda title, text: notify(
-            title, text, item_key=key,
-            on_click=alert_click(store.path, key, alert_callback),
-            published_at=post.published,
-        ))
-        if send(f"Trade Alert · Trump {signal.priority} · {signal.category}", body):
-            notified += 1
-        else:
-            logging.error("Direct-source alert saved, Windows toast failed: %s", key)
+        emitted += alerted
+        notified += sent
     if initial and result.posts:
         store.set_meta("truth_direct_initialized", datetime.fromtimestamp(
             moment, tz=timezone.utc).isoformat())

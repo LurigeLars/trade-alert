@@ -179,8 +179,7 @@ class DirectIntakeTests(unittest.IsolatedAsyncioTestCase):
     async def test_direct_runs_even_while_news_loop_waits(self):
         with tempfile.TemporaryDirectory() as td:
             store = StateStore(pathlib.Path(td) / "state.db")
-            config = Config(truth_rss_enabled=False, breaking_inbox_enabled=False,
-                            truth_direct_enabled=True)
+            config = Config(truth_rss_enabled=False, truth_direct_enabled=True)
             calls = []
             async def slow_news(*args, **kwargs):
                 await asyncio.sleep(10)
