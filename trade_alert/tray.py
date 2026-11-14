@@ -91,11 +91,11 @@ def monitoring_summary(
     resolved_watchlist_name: str | None = None,
     auto_pinned_watchlist: bool = False,
 ) -> str:
-    symbols = ", ".join(config.official_symbols) or "inga"
     routing = ", ".join(sorted(OIL_ROUTING_SYMBOLS))
 
     if config.dtv_watchlist_id:
-        dtv_context = "pinnad lokal TradingView-watchlist"
+        name = resolved_watchlist_name or "namn okänt"
+        dtv_context = f"pinnad i config.json · {name} (id {config.dtv_watchlist_id})"
     elif auto_pinned_watchlist:
         name = resolved_watchlist_name or "namn okänt"
         dtv_context = f"auto-pinnad lokalt från aktiv TradingView-lista · {name}"
@@ -113,24 +113,17 @@ def monitoring_summary(
         f"{watch_lines}"
         f"  ändras under Inställningar… eller i config.json; gäller inom {config.poll_seconds} s\n\n"
         f"Källor\n"
-        f"• DTV TradingView News Flow: PRIMÄR · broad discovery\n"
+        f"• DTV TradingView News Flow: nyhetskällan för olja och egna bevakningar\n"
         f"  {dtv_context}\n"
-        f"• Official TradingView symbol-news: SEKUNDÄR · targeted corroboration\n"
-        f"  {symbols}\n"
-        f"• Chrome lokal överföring: {'påslagen' if config.chrome_bridge_enabled else 'avstängd'}\n"
-        f"  läser enbart lokalt nedladdade filer; sidan måste vara öppen\n"
+        f"• Chrome-tillägget: {'påslaget' if config.chrome_bridge_enabled else 'avstängt'}\n"
+        f"  hämtar Trumps inlägg i bakgrunden och skickar dem till appen via 127.0.0.1\n"
         f"• Direkt Truth Social: {'konfigurerad (åtkomst ej verifierad)' if config.truth_direct_enabled else 'avstängd'}\n"
         f"  var {config.truth_direct_poll_seconds} s; anonym offentlig API, stopp vid 401/403/429\n"
         f"• Trump's Truth RSS: {'konfigurerad tredjepartskälla' if config.truth_rss_enabled else 'avstängd'}\n"
-        f"  var {config.truth_rss_poll_seconds} s · arkivet uppdateras enligt egen uppgift med flera minuters intervall\n"
-        f"• Policy hot path: {'lokalt aktiverad' if config.breaking_inbox_enabled else 'avstängd'}\n"
-        f"  {len(config.breaking_authorized_sources)} godkända käll-ID:n; "
-        f"{'ingen ansluten livekälla' if not config.breaking_authorized_sources else 'inbox-bevakning aktiv, upstream ej automatiskt verifierad'}\n\n"
+        f"  var {config.truth_rss_poll_seconds} s · arkivet uppdateras enligt egen uppgift med flera minuters intervall\n\n"
         f"Polling\n"
         f"• News Flow: var {config.poll_seconds} s · max {config.dtv_max_headlines} headlines\n"
-        f"• News Flow replay-overlap: {config.dtv_replay_overlap_seconds} s för sena/backfillade stories\n"
-        f"• Official TradingView: var {config.official_poll_seconds} s · "
-        f"max {config.official_max_headlines} headlines/symbol\n\n"
+        f"• News Flow replay-overlap: {config.dtv_replay_overlap_seconds} s för sena/backfillade stories\n\n"
         f"Alertfilter\n"
         f"• relevanspoäng ≥ {config.notification_min_score}\n"
         f"• +2 för explicit olje/core-term i rubriken:\n  {', '.join(CORE_TERM_LABELS)}\n"

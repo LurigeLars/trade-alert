@@ -75,6 +75,18 @@ class NewsTests(unittest.IsolatedAsyncioTestCase):
         row = normalize_headlines(payload, source="DTV_NEWS_FLOW")[0]
         self.assertGreaterEqual(relevance_score(row), 3)
 
+    def test_us_iran_statement_matches_without_oil_keyword(self):
+        # Moved from the removed breaking-inbox tests; it covers the news filter itself.
+        payload = {"headlines": [
+            {"id": "iran", "title": "Trump says US will not attack Iran before midterm elections",
+             "published": time.time()},
+            {"id": "other", "title": "President says markets are open for discussion",
+             "published": time.time()},
+        ]}
+        rows = {row.item_id: row for row in normalize_headlines(payload, source="DTV_NEWS_FLOW")}
+        self.assertGreaterEqual(relevance_score(rows["iran"]), 4)
+        self.assertEqual(0, relevance_score(rows["other"]))
+
     async def test_auto_resolves_active_watchlist_with_oil_anchor(self):
         payload = {
             "success": True,

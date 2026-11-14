@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import Config
-from .notifier import alert_click, notify
+from .notifier import deliver_alert, notify
 from .state import StateStore
 from .truth_direct import DirectUnavailable, parse_statuses
 from .media_ocr import extract_image_text, image_url_from_post
@@ -129,30 +129,18 @@ def poll_browser_feed(
                     f" · mottagen +{int(max(0, age))} sek\n"
                     f"Bedömning: {evidence.reason}\n"
                     "Ingen automatisk handel.")
-            stored = store.record_alert(
-                item_key=key, source="TRUTH_CHROME",
-                provider="Truth Social (local Chrome tab)",
+            stored, sent = deliver_alert(
+                store, title=f"Trade Alert · Trump {signal.priority} · {signal.category}",
+                item_key=key, source="TRUTH_CHROME", provider="Truth Social (local Chrome tab)",
                 headline=analysis_text[:240], body=body, score=score,
                 published=post.published, link=post.link, at=now,
+                alert_callback=alert_callback, notification=notification, send=notify,
             )
             if not stored:
                 stats["duplicates"] += 1
                 continue
             stats["alerts"] += 1
-            if alert_callback:
-                try:
-                    alert_callback(store.unread_alert_count())
-                except Exception:
-                    logging.exception("Chrome bridge unread callback failed")
-            send = notification or (lambda title, text: notify(
-                title, text, item_key=key,
-                on_click=alert_click(store.path, key, alert_callback),
-                published_at=post.published,
-            ))
-            if send(f"Trade Alert · Trump {signal.priority} · {signal.category}", body):
-                stats["notified"] += 1
-            else:
-                logging.error("Chrome bridge alert stored but Windows toast failed")
+            stats["notified"] += sent
         except (OSError, UnicodeError, ValueError, json.JSONDecodeError,
                 DirectUnavailable) as exc:
             stats["rejected"] += 1
