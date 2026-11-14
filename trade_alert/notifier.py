@@ -120,17 +120,56 @@ def alert_click(path: Path, item_key: str, on_read: Callable[[int], None] | None
         else:
             from .tray import _show_text_window, format_alert_history, make_window_icon
 
+            try:
+                theme_mode = Config.load().theme_mode
+            except (OSError, ValueError, TypeError):
+                theme_mode = 'system'  # A broken config.json must not block opening the alert.
             text, links = format_alert_history([alert], unread_count)
             _show_text_window(
                 'Trade Alert · Senaste alerts',
                 text,
-                Config.load().theme_mode,
+                theme_mode,
                 make_window_icon(),
                 on_shown=mark_read,
                 links=links,
             )
         return True
     return click
+
+
+def deliver_alert(
+    store: StateStore, *, title: str, item_key: str, source: str, provider: str | None,
+    headline: str, body: str, score: int, published: float | None, link: str | None,
+    at: float, dedupe_key: str | None = None, alert_callback=None,
+    notification: Callable[[str, str], bool] | None = None, send: Callable | None = None,
+) -> tuple[bool, bool]:
+    """Save an alert, refresh the unread badge and queue its toast: one path for every source.
+
+    Returns (alerted, sent). alerted is False for a duplicate or a silent startup replay.
+    `notification(title, body)` replaces the toast in tests; `send` lets callers pass
+    their own module's `notify` so existing patches keep working.
+    """
+    if not store.record_alert(
+        item_key=item_key, source=source, provider=provider, headline=headline, body=body,
+        score=score, published=published, dedupe_key=dedupe_key, link=link, at=at,
+    ):
+        return False, False
+    if alert_callback is not None:
+        try:
+            alert_callback(store.unread_alert_count())
+        except Exception:
+            logging.exception('Unread badge callback failed')
+    if notification is not None:
+        sent = bool(notification(title, body))
+    else:
+        sent = bool((send or notify)(
+            title, body, item_key=item_key,
+            on_click=alert_click(store.path, item_key, alert_callback),
+            published_at=published,
+        ))
+    if not sent:
+        logging.error('Alert %s saved unread, but the Windows notification failed', item_key)
+    return True, sent
 
 
 def _windows_toaster():

@@ -95,10 +95,10 @@ class WatchAlertTests(unittest.IsolatedAsyncioTestCase):
                 store.set_meta("dtv_news_flow_initialized_at", "2026-10-01T00:00:00+00:00")
                 store.begin_notification_session(started_at=time.time() - 30)
                 with (
-                    patch("trade_alert.app._collect", new=AsyncMock(return_value=(items, True, False, True))),
+                    patch("trade_alert.app._collect", new=AsyncMock(return_value=(items, True, True))),
                     patch("trade_alert.app.notify", return_value=True) as sender,
                 ):
-                    result = await run_once(config, store, include_official=False)
+                    result = await run_once(config, store)
                 return result, sender
             finally:
                 store.close()

@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import html
-import logging
 import time
 import urllib.error
 import urllib.request
@@ -16,14 +15,14 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from html.parser import HTMLParser
 from typing import Callable
 from urllib.parse import urlsplit
 
 from .config import Config
 from .trump_filter import classify_trump_statement
 from .event_evidence import assess_truth_evidence
-from .notifier import alert_click, notify
+from .notifier import deliver_alert, notify
+from .truth_direct import html_to_text
 from .state import StateStore
 
 RSS_URL = "https://www.trumpstruth.org/feed"
@@ -35,19 +34,9 @@ class RSSUnavailable(RuntimeError):
     """RSS transport or source format did not satisfy the monitoring contract."""
 
 
-class _PlainText(HTMLParser):
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.parts: list[str] = []
-
-    def handle_data(self, data):
-        self.parts.append(data)
-
-
 def _plain(value: str) -> str:
-    p = _PlainText()
-    p.feed(html.unescape(value))
-    return " ".join("".join(p.parts).split())[:1500]
+    # RSS carries entity-escaped HTML, so unescape once before reading the markup.
+    return html_to_text(html.unescape(value), 1500)
 
 
 @dataclass(frozen=True)
@@ -219,29 +208,15 @@ async def read_rss_once(config: Config, store: StateStore, *,
                 + datetime.fromtimestamp(post.published).astimezone().strftime("%H:%M:%S")
                 + f" · upptäckt +{int(max(0, age))} sek"
                 + f"\nBedömning: {evidence.reason}")
-        inserted = store.record_alert(
-            item_key=key, source="TRUMP_TRUTH_RSS",
-            provider="Trump's Truth RSS (third party)",
+        stored, sent = deliver_alert(
+            store, title=f"Trade Alert · Trump {signal.priority} · {signal.category} (RSS)",
+            item_key=key, source="TRUMP_TRUTH_RSS", provider="Trump's Truth RSS (third party)",
             headline=post.text[:240], body=body, score=score,
             published=post.published, link=post.link, at=moment,
+            alert_callback=alert_callback, notification=notification, send=notify,
         )
-        if not inserted:
-            continue
-        alerted += 1
-        if alert_callback:
-            try:
-                alert_callback(store.unread_alert_count())
-            except Exception:
-                logging.exception("RSS unread count callback failed")
-        send = notification or (lambda title, text: notify(
-            title, text, item_key=key,
-            on_click=alert_click(store.path, key, alert_callback),
-            published_at=post.published,
-        ))
-        if send(f"Trade Alert · Trump {signal.priority} · {signal.category} (RSS)", body):
-            notified += 1
-        else:
-            logging.error("RSS alert saved but Windows toast was not accepted")
+        alerted += stored
+        notified += sent
     if initial:
         store.set_meta("truth_rss_initialized", datetime.fromtimestamp(
             moment, tz=timezone.utc).isoformat())

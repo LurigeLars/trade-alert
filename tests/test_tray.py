@@ -155,23 +155,22 @@ class TrayTests(unittest.TestCase):
     def test_monitoring_summary_exposes_effective_configuration(self):
         config = Config(
             profile_name="Oil / Brent",
-            official_symbols=("ICEEUR:BRN1!",),
             dtv_watchlist_id=None,
             poll_seconds=20,
-            official_poll_seconds=30,
             notification_min_score=2,
+            chrome_bridge_enabled=True,
         )
         summary = monitoring_summary(config)
         self.assertIn("Oil / Brent", summary)
-        self.assertIn("ICEEUR:BRN1!", summary)
-        self.assertIn("PRIMÄR", summary)
         self.assertIn("auto-upptäcker", summary)
         self.assertIn("var 20 s", summary)
         self.assertIn("max 200 headlines", summary)
         self.assertIn("replay-overlap: 3600 s", summary)
-        self.assertIn("var 30 s", summary)
-        self.assertIn("targeted corroboration", summary)
         self.assertIn("routing evidence", summary)
+        self.assertIn("Chrome-tillägget: påslaget", summary)
+        # Removed sources and the old download-file description must not be shown.
+        self.assertNotIn("Official TradingView", summary)
+        self.assertNotIn("nedladdade filer", summary)
         self.assertIn("relevanspoäng ≥ 2", summary)
         self.assertIn("ingen LLM", summary)
 
@@ -183,6 +182,12 @@ class TrayTests(unittest.TestCase):
         )
         self.assertIn("auto-pinnad lokalt", summary)
         self.assertIn("Watchlist", summary)
+
+    def test_monitoring_summary_shows_watchlist_pinned_in_config(self):
+        summary = monitoring_summary(
+            Config(dtv_watchlist_id="341892775"), resolved_watchlist_name="Tradealert",
+        )
+        self.assertIn("pinnad i config.json · Tradealert (id 341892775)", summary)
 
     def test_theme_resolution_defaults_system_to_detected_windows_mode(self):
         self.assertEqual("dark", resolve_theme("system", system_dark=True))
