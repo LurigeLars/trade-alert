@@ -13,7 +13,9 @@ from typing import Awaitable, Callable, Literal
 import pystray
 from PIL import Image, ImageDraw
 
-from .config import Config, app_dir
+from dataclasses import replace
+
+from .config import Config, Watch, app_dir
 from .news import CORE_TERM_LABELS, IMPACT_TERM_LABELS, OIL_ROUTING_SYMBOLS, normalize_news_link
 from .state import MAX_ALERT_HISTORY, AlertRecord, StateStore
 from .windows_ui import (
@@ -103,8 +105,13 @@ def monitoring_summary(
             "minst ett verifierat oljeankare krävs"
         )
 
+    watch_lines = "".join(f"• {watch_label(watch)}\n" for watch in config.watches) or "• inga\n"
     return (
         f"Profil\n{config.profile_name}\n\n"
+        f"Bevakningar\n"
+        f"• Oljebevakning: {'på' if config.oil_watch_enabled else 'av'}\n"
+        f"{watch_lines}"
+        f"  ändras under Inställningar… eller i config.json; gäller inom {config.poll_seconds} s\n\n"
         f"Källor\n"
         f"• DTV TradingView News Flow: PRIMÄR · broad discovery\n"
         f"  {dtv_context}\n"
@@ -344,7 +351,7 @@ def _show_text_window(
                     text_widget.tag_delete(old_tag)
             text_widget.insert("1.0", current_text)
 
-            headings = {"Profil", "Källor", "Polling", "Alertfilter", "Första News Flow-start", "Modell"}
+            headings = {"Profil", "Bevakningar", "Källor", "Polling", "Alertfilter", "Första News Flow-start", "Modell"}
             text_widget.tag_configure("heading", font=("Segoe UI Semibold", 10))
             for line_number, line in enumerate(current_text.splitlines(), start=1):
                 if line.strip() in headings:
@@ -461,6 +468,217 @@ def _show_text_window(
     thread.start()
 
 
+SOURCE_TOGGLES = (
+    ("oil_watch_enabled", "Oljebevakning (inbyggda oljeregler i News Flow)"),
+    ("truth_rss_enabled", "Trump via Truth-RSS"),
+    ("chrome_bridge_enabled", "Trump via Chrome-tillägget"),
+    ("truth_direct_enabled", "Truth Social direkt (blockeras ofta med 403)"),
+)
+
+
+def parse_terms(text: str) -> tuple[str, ...]:
+    """Comma- or newline-separated input → unique, trimmed terms in typed order."""
+    parts = (part.strip() for part in text.replace("\n", ",").split(","))
+    return tuple(dict.fromkeys(part for part in parts if part))
+
+
+def watch_label(watch: Watch) -> str:
+    state = "PÅ" if watch.enabled else "AV"
+    details = []
+    if watch.keywords:
+        details.append("ord: " + ", ".join(watch.keywords))
+    if watch.symbols:
+        details.append("symboler: " + ", ".join(watch.symbols))
+    return f"[{state}] {watch.name} — " + " · ".join(details)
+
+
+def apply_settings(config: Config, toggles: dict[str, bool], watches: list[Watch]) -> None:
+    """Validate the window's values, then update the shared config and config.json together."""
+    unknown = set(toggles) - {name for name, _label in SOURCE_TOGGLES}
+    if unknown:
+        raise ValueError(f"unknown settings: {', '.join(sorted(unknown))}")
+    candidate = replace(config, **toggles, watches=tuple(watches))
+    candidate.validate()
+    config.update_from(candidate)
+    config.save()
+
+
+def _show_settings_window(config: Config, watchlist_label: str, app_icon: Image.Image | None = None) -> None:
+    if os.name != "nt":
+        logging.info("Settings window is only available on Windows")
+        return
+
+    def run_window() -> None:
+        import tkinter as tk
+        from tkinter import messagebox
+        from PIL import ImageTk
+
+        theme = resolve_theme(config.theme_mode)
+        palette = theme_palette(theme)
+        root = tk.Tk()
+        root.title("Trade Alert · Inställningar")
+        if app_icon is not None:
+            root._trade_alert_icon = ImageTk.PhotoImage(app_icon)  # type: ignore[attr-defined]
+            root.iconphoto(True, root._trade_alert_icon)  # type: ignore[attr-defined]
+        # The app is per-monitor DPI aware, so pixel sizes must follow the display scaling.
+        scale = max(1.0, root.winfo_fpixels("1i") / 96)
+        root.geometry(f"{int(780 * scale)}x{int(600 * scale)}")
+        root.minsize(int(600 * scale), int(480 * scale))
+        root.configure(bg=palette["window"])
+        _apply_windows_titlebar_theme(root, dark=theme == "dark")
+
+        def label(parent, text, *, heading=False, muted=False):
+            widget = tk.Label(
+                parent, text=text, anchor="w", justify="left",
+                bg=palette["window"], fg=palette["muted" if muted else "text"],
+                font=("Segoe UI Semibold", 10) if heading else ("Segoe UI", 9),
+            )
+            widget.bind("<Configure>", lambda e: e.widget.configure(wraplength=max(100, e.width - 4)))
+            return widget
+
+        def button(parent, text, command):
+            return tk.Button(
+                parent, text=text, command=command, bg=palette["button"], fg=palette["text"],
+                activebackground=palette["button_active"], activeforeground=palette["text"],
+                relief="flat", borderwidth=0, padx=12, pady=6, font=("Segoe UI", 9), cursor="hand2",
+            )
+
+        outer = tk.Frame(root, bg=palette["window"], padx=16, pady=14)
+        outer.pack(fill="both", expand=True)
+        # Bottom rows are packed first so the expanding list can never push them out of view.
+        footer = tk.Frame(outer, bg=palette["window"], pady=10)
+        footer.pack(fill="x", side="bottom")
+        status = label(outer, "", muted=True)
+        status.pack(fill="x", side="bottom")
+
+        label(outer, "Källor", heading=True).pack(fill="x")
+        toggle_vars = {name: tk.BooleanVar(value=getattr(config, name)) for name, _ in SOURCE_TOGGLES}
+        for name, text in SOURCE_TOGGLES:
+            tk.Checkbutton(
+                outer, text=text, variable=toggle_vars[name], anchor="w",
+                bg=palette["window"], fg=palette["text"], selectcolor=palette["surface"],
+                activebackground=palette["window"], activeforeground=palette["text"],
+                font=("Segoe UI", 9),
+            ).pack(fill="x")
+        label(outer, f"Nyheter hämtas från TradingView-listan {watchlist_label}. "
+                     "Bevakningar matchar bara nyheter om symbolerna i den listan.",
+              muted=True).pack(fill="x", pady=(4, 12))
+
+        label(outer, "Egna bevakningar", heading=True).pack(fill="x")
+        label(outer, "Larmar när ett sökord står i rubriken eller nyheten gäller en av symbolerna.",
+              muted=True).pack(fill="x")
+
+        watches: list[Watch] = list(config.watches)
+        list_bar = tk.Frame(outer, bg=palette["window"])
+        list_bar.pack(fill="x", side="bottom")
+        list_frame = tk.Frame(outer, bg=palette["surface"], highlightbackground=palette["border"],
+                              highlightthickness=1)
+        list_frame.pack(fill="both", expand=True, pady=(6, 6))
+        listbox = tk.Listbox(
+            list_frame, bg=palette["surface"], fg=palette["text"], relief="flat", borderwidth=0,
+            highlightthickness=0, selectbackground=palette["selection"],
+            selectforeground=palette["selection_text"], font=("Segoe UI", 9), activestyle="none",
+        )
+        listbox.pack(fill="both", expand=True, padx=6, pady=6)
+
+        def refresh() -> None:
+            listbox.delete(0, "end")
+            for watch in watches:
+                listbox.insert("end", watch_label(watch))
+
+        def selected() -> int | None:
+            picked = listbox.curselection()
+            return picked[0] if picked else None
+
+        def edit(index: int | None) -> None:
+            current = watches[index] if index is not None else Watch(name="")
+            dialog = tk.Toplevel(root)
+            dialog.title("Bevakning")
+            dialog.configure(bg=palette["window"], padx=14, pady=12)
+            dialog.transient(root)
+            dialog.grab_set()
+            entries = {}
+            fields_spec = (
+                ("name", "Namn", current.name),
+                ("keywords", "Sökord (kommaseparerade)", ", ".join(current.keywords)),
+                ("symbols", "Symboler, t.ex. NASDAQ:MSFT (kommaseparerade)", ", ".join(current.symbols)),
+            )
+            for key, text, value in fields_spec:
+                label(dialog, text).pack(fill="x")
+                entry = tk.Entry(dialog, width=60, bg=palette["surface"], fg=palette["text"],
+                                 insertbackground=palette["text"], relief="flat", font=("Segoe UI", 9))
+                entry.insert(0, value)
+                entry.pack(fill="x", pady=(2, 8), ipady=3)
+                entries[key] = entry
+
+            def accept() -> None:
+                candidate = Watch(
+                    name=entries["name"].get().strip(),
+                    keywords=parse_terms(entries["keywords"].get()),
+                    symbols=tuple(s.upper() for s in parse_terms(entries["symbols"].get())),
+                    enabled=current.enabled,
+                )
+                try:
+                    candidate.validate()
+                    others = [w.name.casefold() for i, w in enumerate(watches) if i != index]
+                    if candidate.name.casefold() in others:
+                        raise ValueError("det finns redan en bevakning med det namnet")
+                except ValueError as exc:
+                    messagebox.showerror("Bevakning", str(exc), parent=dialog)
+                    return
+                if index is None:
+                    watches.append(candidate)
+                else:
+                    watches[index] = candidate
+                refresh()
+                dialog.destroy()
+
+            bar = tk.Frame(dialog, bg=palette["window"])
+            bar.pack(fill="x", pady=(4, 0))
+            button(bar, "Avbryt", dialog.destroy).pack(side="right")
+            button(bar, "OK", accept).pack(side="right", padx=(0, 8))
+            entries["name"].focus_set()
+            dialog.bind("<Return>", lambda _e: accept())
+            dialog.bind("<Escape>", lambda _e: dialog.destroy())
+
+        def toggle() -> None:
+            index = selected()
+            if index is not None:
+                watches[index] = replace(watches[index], enabled=not watches[index].enabled)
+                refresh()
+                listbox.selection_set(index)
+
+        def remove() -> None:
+            index = selected()
+            if index is not None and messagebox.askyesno(
+                    "Ta bort", f"Ta bort bevakningen {watches[index].name}?", parent=root):
+                del watches[index]
+                refresh()
+
+        button(list_bar, "Lägg till", lambda: edit(None)).pack(side="left")
+        button(list_bar, "Ändra", lambda: selected() is not None and edit(selected())).pack(side="left", padx=(8, 0))
+        button(list_bar, "Slå på/av", toggle).pack(side="left", padx=(8, 0))
+        button(list_bar, "Ta bort", remove).pack(side="left", padx=(8, 0))
+        listbox.bind("<Double-Button-1>", lambda _e: selected() is not None and edit(selected()))
+
+        def save() -> None:
+            try:
+                apply_settings(config, {n: v.get() for n, v in toggle_vars.items()}, watches)
+            except (OSError, ValueError) as exc:
+                messagebox.showerror("Kunde inte spara", str(exc), parent=root)
+                return
+            logging.info("Settings saved from the settings window")
+            status.configure(text="Sparat. Gäller direkt.")
+
+        button(footer, "Stäng", root.destroy).pack(side="right")
+        button(footer, "Spara", save).pack(side="right", padx=(0, 8))
+        root.bind("<Escape>", lambda _e: root.destroy())
+        refresh()
+        root.mainloop()
+
+    threading.Thread(target=run_window, name="TradeAlertSettingsWindow", daemon=True).start()
+
+
 class TrayController:
     def __init__(
         self,
@@ -502,6 +720,7 @@ class TrayController:
                     default=True,
                 ),
                 pystray.MenuItem("Vad bevakas?", self._show_monitoring),
+                pystray.MenuItem("Inställningar…", self._show_settings),
                 pystray.MenuItem(
                     "Tema",
                     pystray.Menu(
@@ -656,6 +875,15 @@ class TrayController:
             self.config.theme_mode,
             make_window_icon(),
         )
+
+    def _show_settings(self, _icon, _item) -> None:
+        store = StateStore()
+        try:
+            name = store.get_meta("dtv_watchlist_name") or "namn okänt"
+            watchlist_id = self.config.dtv_watchlist_id or store.get_meta("dtv_watchlist_id") or "ej vald"
+        finally:
+            store.close()
+        _show_settings_window(self.config, f"\"{name}\" (id {watchlist_id})", make_window_icon())
 
     def _show_alert_history(self, _icon, _item) -> None:
         store = StateStore()
