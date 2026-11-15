@@ -45,13 +45,11 @@ jobs:
         shell: pwsh
         run: |
           node --check .\chrome_extension\reader.js
-          node --check .\chrome_extension\relay.js
           node --check .\chrome_extension\background.js
           node --check .\chrome_extension\popup.js
           node --test .\tests\test_chrome_extension.cjs
-          node --test .\tests\test_chrome_relay.cjs
           node --test .\tests\test_chrome_popup.cjs
-          node --test .\tests\test_chrome_single_poller.cjs
+          node --test .\tests\test_chrome_reader.cjs
 
 
       - name: PowerShell syntax
