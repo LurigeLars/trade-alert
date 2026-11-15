@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Trade Alert - Trump Monitor",
-  "version": "0.5.0",
+  "version": "0.5.1",
+  "minimum_chrome_version": "120",
   "description": "Monitors verified public Trump posts and transfers them silently to the local Trade Alert Windows app.",
   "permissions": [
     "storage",
@@ -20,20 +21,10 @@
         "https://truthsocial.com/*"
       ],
       "js": [
-        "relay.js"
-      ],
-      "run_at": "document_idle",
-      "world": "ISOLATED"
-    },
-    {
-      "matches": [
-        "https://truthsocial.com/*"
-      ],
-      "js": [
         "reader.js"
       ],
       "run_at": "document_idle",
-      "world": "MAIN"
+      "world": "ISOLATED"
     }
   ],
   "action": {

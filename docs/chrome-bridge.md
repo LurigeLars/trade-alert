@@ -113,17 +113,18 @@ still block it.
 - **Stäng av bakgrundsläge** stops the alarm and returns to legacy tab mode.
   **Öppna kontoflik (reserv)** still opens the working original page.
 
-If Chrome's extensions page reports `Uncaught Error: Extension context invalidated`
-from `relay.js` after reloading an unpacked extension, the old open
-Truth Social tab may still contain a content-script listener belonging to the
-previous extension instance. That old script cannot contact the new instance.
-Close the unnecessary account tab while BG is running (or reload the tab if
-using the tab fallback). The error listing is historical and can be cleared
-in `chrome://extensions`. The relay guards synchronous and asynchronous
-invalidated-context errors and detaches a stale listener. This error does not
-by itself indicate that the independently probed BG feed has failed.
+The account-tab reader runs in Chrome's **ISOLATED** extension world and sends
+mode, health and post messages directly to the service worker. There is no
+page-message relay or MAIN-world reader. The worker rejects the retired relay
+protocol and requires this extension's top-frame content script on an allowed
+account URL. Pairing and the existing cursor do not need to be reset.
 
-The extension intentionally does not use headless Playwright, launch another
+After reloading the unpacked extension, reload existing Truth Social tabs to
+replace their old content scripts. An invalidated reader stops polling without
+uncaught errors. A historical `relay.js` error may remain in the extensions
+page; it does not establish a failure in the independent background monitor.
+
+During normal monitoring the extension does not use headless Playwright, launch another
 Chromium browser, connect Chrome via an exposed debugging port, or work around
 Cloudflare access controls. A separate automated Chromium was previously
 observed to receive an HTTP 403; Chrome's background worker may likewise be
@@ -149,9 +150,9 @@ session replay or access-control bypass. Opening the Truth Social website
 may itself issue requests outside the extension's control; avoiding double
 extension polling does not guarantee that the site never rate-limits.
 
-The tab's permission handshake never shares cookies, authorization
-headers or the extension's local state with the page, only a boolean
-permitting or denying a tab read. If service-worker communication fails,
+The tab's permission request stays inside the extension; the page receives
+neither its result nor cookies, authorization headers or extension state.
+If service-worker communication fails or exceeds 2.5 seconds,
 the tab does **not** fetch: it tries the lightweight permission check again
 at its next interval. The existing third-party RSS fallback is independent.
 
@@ -336,7 +337,8 @@ video understanding or guaranteed semantic analysis of photos with no text.
 
 - The extension can read the fixed public JSON endpoint only from its listed
   host permission; it never exports Truth Social cookies or account credentials. Its local bridge token stays in trusted extension storage.
-- Chrome MAIN-world messages must be considered **untrusted**. The receiving
+- Page scripts have no message route into the reader. Source payloads remain
+  **untrusted**. The receiving
   Python process validates fixed account identity, fresh publication and
   post IDs again; this is not a cryptographically authenticated feed.
 - The downloaded JSON folder is writable by local applications and is not
