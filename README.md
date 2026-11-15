@@ -44,6 +44,10 @@ hosts, sends no image to an AI provider, and labels OCR-derived evidence.
 The Chrome extension requires Chrome 120 or newer. Backup-tab requests have an
 eight-second deadline; a timed-out request reports an error and retries with
 the existing backoff instead of stalling the reader.
+The backup reader runs in Chrome's isolated extension world and talks directly
+to its service worker. Page scripts cannot submit monitor status or posts through
+window messages. After an extension update, reload existing account tabs; pairing
+and the saved delivery cursor are retained.
 
 An optional [local Chrome bridge](docs/chrome-bridge.md) transfers newly
 observed posts from Chrome to the Windows app via a **silent localhost

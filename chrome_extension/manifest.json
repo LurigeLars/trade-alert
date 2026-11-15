@@ -21,20 +21,10 @@
         "https://truthsocial.com/*"
       ],
       "js": [
-        "relay.js"
-      ],
-      "run_at": "document_idle",
-      "world": "ISOLATED"
-    },
-    {
-      "matches": [
-        "https://truthsocial.com/*"
-      ],
-      "js": [
         "reader.js"
       ],
       "run_at": "document_idle",
-      "world": "MAIN"
+      "world": "ISOLATED"
     }
   ],
   "action": {

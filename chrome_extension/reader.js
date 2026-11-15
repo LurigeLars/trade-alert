@@ -22,36 +22,28 @@
   let failures = 0;
   let stopped = false;
 
-  const CHANNEL = "trade-alert-public-feed-v1";
-  const report = (type, payload) => window.postMessage({
-    channel: CHANNEL,
-    type,
-    ...payload
-  }, location.origin);
+  async function report(kind, payload = {}) {
+    try {
+      return await chrome.runtime.sendMessage({kind, ...payload});
+    } catch (error) {
+      if (String(error?.message || "").includes("Extension context invalidated")) stopped = true;
+      return null;
+    }
+  }
 
-  let requestId = 0;
-  function mayFetchInTab() {
+  async function mayFetchInTab() {
     // The service worker is authoritative for source mode. Request its state
-    // BEFORE any page-context fetch; fail closed if the bridge is unavailable.
-    return new Promise(resolve => {
-      const id = ++requestId;
-      let timer;
-      const onAnswer = event => {
-        if (event.source !== window || event.origin !== location.origin ||
-            event.data?.channel !== CHANNEL ||
-            event.data?.type !== "monitor-mode-response" ||
-            event.data?.requestId !== id) return;
-        clearTimeout(timer);
-        window.removeEventListener("message", onAnswer);
-        resolve(event.data.tabAllowed === true);
-      };
-      window.addEventListener("message", onAnswer);
-      timer = setTimeout(() => {
-        window.removeEventListener("message", onAnswer);
-        resolve(false);
-      }, 2500);
-      report("monitor-mode-query", {requestId: id});
-    });
+    // BEFORE any tab fetch; fail closed if the worker is unavailable.
+    let timer;
+    try {
+      const response = await Promise.race([
+        report("reader_mode"),
+        new Promise(resolve => { timer = setTimeout(() => resolve(null), 2500); })
+      ]);
+      return response?.tabAllowed === true;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async function poll() {
@@ -71,7 +63,7 @@
         signal: AbortSignal.timeout(8000)
       });
       if (!response.ok) {
-        report("health", {status: "HTTP_" + response.status});
+        report("reader_health", {status: "HTTP_" + response.status});
         if ([401, 403, 429].includes(response.status)) {
           stopped = true; // Stop at refusal, do not change identity or retry.
         } else {
@@ -100,8 +92,8 @@
               }))
             : []
         }));
-        report("posts", {posts});
-        report("health", {
+        report("reader_posts", {posts});
+        report("reader_health", {
           status: "HTTP_200",
           count: posts.length,
           elapsed_ms: Math.round(performance.now() - start)
@@ -109,7 +101,7 @@
         failures = 0;
       }
     } catch {
-      report("health", {status: "ERROR"});
+      report("reader_health", {status: "ERROR"});
       failures = Math.min(failures + 1, 4);
     }
     if (!stopped) {

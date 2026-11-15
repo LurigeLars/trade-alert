@@ -86,6 +86,8 @@ function sanitizedMedia(items) {
 }
 
 function validSender(sender) {
+  if (sender.id !== chrome.runtime.id || sender.frameId !== 0 ||
+      !Number.isInteger(sender.tab?.id) || sender.tab.id < 0) return false;
   try {
     const url = new URL(sender.url);
     return url.origin === "https://truthsocial.com" &&
@@ -221,7 +223,8 @@ async function handle(msg, sender) {
     return {status: "IGNORED"};
   }
   if (!validSender(sender)) return {status: "IGNORED"};
-  if (msg.kind === "monitor_mode") {
+  // Retired page-relay kinds are deliberately not accepted after an update.
+  if (msg.kind === "reader_mode") {
     const state = await chrome.storage.local.get([
       "truthBackgroundEnabled", "truthRateLimitUntil"
     ]);
@@ -230,7 +233,7 @@ async function handle(msg, sender) {
         Date.now() >= Number(state.truthRateLimitUntil || 0)
     };
   }
-  if (msg.kind === "health") {
+  if (msg.kind === "reader_health") {
     const status = String(msg.status || "").slice(0, 20);
     // A rate limit applies to the account endpoint regardless of whether it
     // was the tab or background worker that observed it.
@@ -249,7 +252,7 @@ async function handle(msg, sender) {
     await health(status);
     return {status};
   }
-  if (msg.kind !== "posts" || !Array.isArray(msg.posts) ||
+  if (msg.kind !== "reader_posts" || !Array.isArray(msg.posts) ||
       msg.posts.length > 25) return {status: "INVALID"};
   return ingest(msg.posts);
 }

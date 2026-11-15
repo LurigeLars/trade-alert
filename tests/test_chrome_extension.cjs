@@ -81,9 +81,9 @@ function harness() {
     },
     AbortSignal,
   }, {filename:"background.js"});
-  async function send(msg, senderUrl="https://truthsocial.com/@realDonaldTrump") {
+  async function send(msg, senderUrl="https://truthsocial.com/@realDonaldTrump", extraSender = {}) {
     return await new Promise((resolve, reject) => {
-      const yes = listeners.message(msg, {url:senderUrl}, resolve);
+      const yes = listeners.message(msg, {url:senderUrl, id:chrome.runtime.id, frameId:0, tab:{id:1}, ...extraSender}, resolve);
       if (yes !== true) reject(Error("listener not async"));
     });
   }
@@ -115,13 +115,36 @@ const original = {
   content:"<p>Trump says no attack on Iran</p>"
 };
 
+test("Retired relay protocol cannot change mode, poison the cursor or transfer posts", async () => {
+  const h = harness();
+  h.seenState.truthSeenIds = [original.id];
+  h.seenState.truthBackgroundEnabled = true;
+  for (const msg of [{kind:"health",status:"HTTP_429"},
+    {kind:"posts",posts:[{...original,id:"117406359223020085"}]}, {kind:"monitor_mode"}]) {
+    assert.equal((await h.send(msg)).status, "INVALID");
+  }
+  assert.equal(h.seenState.truthBackgroundEnabled, true);
+  assert.equal(h.seenState.truthRateLimitUntil, undefined);
+  assert.deepEqual(h.seenState.truthSeenIds, [original.id]);
+  assert.equal(h.transfers.length, 0);
+});
+
+test("Reader commands require this extension's top-frame content script sender", async () => {
+  const h = harness();
+  for (const sender of [{id:"other-extension"}, {frameId:1}, {tab:undefined}, {tab:{id:-1}}]) {
+    assert.equal((await h.send({kind:"reader_health",status:"HTTP_429"},
+      "https://truthsocial.com/@realDonaldTrump", sender)).status, "IGNORED");
+  }
+  assert.equal(h.seenState.truthRateLimitUntil, undefined);
+});
+
 test("Initial fetch baselines and new posts transfer exactly once", async () => {
   const h = harness();
-  const a = await h.send({kind:"posts",posts:[original]});
+  const a = await h.send({kind:"reader_posts",posts:[original]});
   assert.equal(a.status,"BASELINED");
   assert.equal(h.transfers.length,0);
   const next = {...original,id:"117406359223020085"};
-  const b = await h.send({kind:"posts",posts:[next, original]});
+  const b = await h.send({kind:"reader_posts",posts:[next, original]});
   assert.equal(b.count,1);
   assert.equal(h.transfers.length,1);
   assert.equal(h.transfers[0].url, "http://127.0.0.1:18761/chrome-post");
@@ -133,39 +156,39 @@ test("Initial fetch baselines and new posts transfer exactly once", async () => 
   assert.equal(payload.account.id,ACCOUNT);
   assert.equal(payload.id,next.id);
   assert.ok(!("cookie" in payload) && !("token" in payload));
-  await h.send({kind:"posts",posts:[next, original]});
+  await h.send({kind:"reader_posts",posts:[next, original]});
   assert.equal(h.transfers.length,1);
 });
 
 test("Reject spoofing and unapproved web origins", async () => {
   const h=harness();
   const wrong = {...original,id:"117406359223020085",account:{id:"123",acct:"other"}};
-  await h.send({kind:"posts",posts:[original]});
-  await h.send({kind:"posts",posts:[wrong]});
-  await h.send({kind:"posts",posts:[{...original,id:"117406359223020085"}]},
+  await h.send({kind:"reader_posts",posts:[original]});
+  await h.send({kind:"reader_posts",posts:[wrong]});
+  await h.send({kind:"reader_posts",posts:[{...original,id:"117406359223020085"}]},
                "https://example.com/");
   assert.equal(h.transfers.length,0);
 });
 
 test("HTTP refused reports status without retry on behalf of the background worker", async () => {
   const h=harness();
-  const x=await h.send({kind:"health",status:"HTTP_403"});
+  const x=await h.send({kind:"reader_health",status:"HTTP_403"});
   assert.equal(x.status,"HTTP_403");
   assert.equal(h.badges.at(-1),"403");
 });
 
 test("Failed local transfer is retried and no browser download occurs", async () => {
   const h=harness();
-  await h.send({kind:"posts",posts:[original]});
+  await h.send({kind:"reader_posts",posts:[original]});
   const next = {...original,id:"117406359223020085"};
   h.setBridgeAvailable(false);
-  const failed=await h.send({kind:"posts",posts:[next]});
+  const failed=await h.send({kind:"reader_posts",posts:[next]});
   assert.equal(failed.status,"BRIDGE_OFFLINE");
   assert.equal(failed.pending,1);
   assert.equal(h.seenState.truthLastDeliveryStatus,"BRIDGE_OFFLINE");
   assert.equal(h.seenState.truthSeenIds.includes(next.id), false);
   h.setBridgeAvailable(true);
-  const delivered=await h.send({kind:"posts",posts:[next]});
+  const delivered=await h.send({kind:"reader_posts",posts:[next]});
   assert.equal(delivered.status,"TRANSFERRED");
   assert.equal(delivered.count,1);
   assert.equal(h.seenState.truthSeenIds.includes(next.id), true);
@@ -213,7 +236,7 @@ test("HTTP 403 fails closed; cannot claim background monitoring", async () => {
   assert.equal(h.alarms.size,0);
   assert.equal(h.badges.at(-1),"403");
   // The first-party tab reader works, but must not impersonate BG.
-  await h.send({kind:"health",status:"HTTP_200"});
+  await h.send({kind:"reader_health",status:"HTTP_200"});
   assert.equal(h.badges.at(-1),"TAB");
   const state=await h.popup("background_status");
   assert.equal(state.enabled,false);
@@ -237,7 +260,7 @@ test("Background source without validated account data never enables", async () 
 
 test("Previously baselined tab data does not generate duplicate downloads", async () => {
   const h=harness();
-  await h.send({kind:"posts",posts:[original]});
+  await h.send({kind:"reader_posts",posts:[original]});
   h.setFetch(async () => ({
     ok:true,status:200,headers:{get() {return "1000";}},
     async text() {return JSON.stringify([original]);}
@@ -245,7 +268,7 @@ test("Previously baselined tab data does not generate duplicate downloads", asyn
   const r=await h.popup("background_test");
   assert.equal(r.status,"HTTP_200");
   assert.equal(h.transfers.length,0);
-  await h.send({kind:"health",status:"HTTP_200"});
+  await h.send({kind:"reader_health",status:"HTTP_200"});
   assert.equal(h.badges.at(-1),"ON"); // tab success does not change background status
 });
 
@@ -258,10 +281,10 @@ test("An active background monitor denies independent tab polling", async () => 
   }));
   const activated=await h.popup("background_test");
   assert.equal(activated.status, "HTTP_200");
-  const during=await h.send({kind:"monitor_mode"});
+  const during=await h.send({kind:"reader_mode"});
   assert.equal(during.tabAllowed, false);
   await h.popup("background_off");
-  const fallback=await h.send({kind:"monitor_mode"});
+  const fallback=await h.send({kind:"reader_mode"});
   assert.equal(fallback.tabAllowed, true);
 });
 
@@ -281,7 +304,7 @@ test("HTTP 429 is labeled 429, turns background off and stops both pollers", asy
   assert.equal(h.badges.at(-1), "429");
   assert.equal(h.alarms.size, 0);
   assert.ok(blocked.cooldown_until > Date.now() + 29*60*1000);
-  assert.equal((await h.send({kind:"monitor_mode"})).tabAllowed,false);
+  assert.equal((await h.send({kind:"reader_mode"})).tabAllowed,false);
   const repeat=await h.popup("background_test");
   assert.equal(repeat.status, "HTTP_429");
   assert.equal(requests, 1); // no network retry while rate-limited
@@ -290,12 +313,12 @@ test("HTTP 429 is labeled 429, turns background off and stops both pollers", asy
 
 test("Tab-visible HTTP 429 also pauses future tab and background fetching", async () => {
   const h=harness();
-  await h.send({kind:"health",status:"HTTP_429"});
+  await h.send({kind:"reader_health",status:"HTTP_429"});
   assert.equal(h.badges.at(-1),"429");
   const state=await h.popup("background_status");
   assert.equal(state.status,"HTTP_429");
   assert.equal(state.enabled,false);
-  assert.equal((await h.send({kind:"monitor_mode"})).tabAllowed,false);
+  assert.equal((await h.send({kind:"reader_mode"})).tabAllowed,false);
   assert.ok(state.cooldown_until > Date.now() + 29*60*1000);
 });
 
@@ -308,9 +331,9 @@ test("A tab-observed 429 shuts down an otherwise active background monitor", asy
   }));
   assert.equal((await h.popup("background_test")).enabled,true);
   assert.equal(h.alarms.size,1);
-  await h.send({kind:"health",status:"HTTP_429"});
+  await h.send({kind:"reader_health",status:"HTTP_429"});
   assert.equal((await h.popup("background_status")).enabled,false);
-  assert.equal((await h.send({kind:"monitor_mode"})).tabAllowed,false);
+  assert.equal((await h.send({kind:"reader_mode"})).tabAllowed,false);
   assert.equal(h.alarms.size,0);
   assert.equal(h.badges.at(-1),"429");
 });
@@ -322,7 +345,7 @@ test("User incident: opening account tab cannot show ON when background is OFF",
   h.seenState.truthBackgroundLastStatus="HTTP_429";
   h.seenState.truthBackgroundLastChecked=new Date(Date.now()-40*60*1000).toISOString();
   h.seenState.truthRateLimitUntil=Date.now()-1000;
-  await h.send({kind:"health",status:"HTTP_200"});
+  await h.send({kind:"reader_health",status:"HTTP_200"});
   assert.equal(h.badges.at(-1),"TAB");
   const status=await h.popup("background_status");
   assert.equal(status.enabled,false);
@@ -339,7 +362,7 @@ test("Background remains ON despite stale tab health messages", async () => {
     async text() {return JSON.stringify([original]);}
   }));
   assert.equal((await h.popup("background_test")).enabled,true);
-  await h.send({kind:"health",status:"HTTP_200"});
+  await h.send({kind:"reader_health",status:"HTTP_200"});
   assert.equal(h.badges.at(-1),"ON");
   const status=await h.popup("background_status");
   assert.equal(status.enabled,true);
@@ -349,9 +372,9 @@ test("Background remains ON despite stale tab health messages", async () => {
 
 test("A tab HTTP 200 never masks a continuing HTTP 429 cooldown", async () => {
   const h=harness();
-  await h.send({kind:"health",status:"HTTP_429"});
+  await h.send({kind:"reader_health",status:"HTTP_429"});
   assert.equal(h.badges.at(-1),"429");
-  await h.send({kind:"health",status:"HTTP_200"});
+  await h.send({kind:"reader_health",status:"HTTP_200"});
   assert.equal(h.badges.at(-1),"429");
   const info=await h.popup("background_status");
   assert.equal(info.enabled,false);
@@ -372,9 +395,9 @@ test("No background and no recent tab result is OFF", async () => {
 test("Unpaired extension never transfers and pairs through popup only", async () => {
   const h=harness();
   delete h.seenState.truthLocalToken;
-  await h.send({kind:"posts",posts:[original]});
+  await h.send({kind:"reader_posts",posts:[original]});
   const next={...original,id:"117406359223020085"};
-  const denied=await h.send({kind:"posts",posts:[next]});
+  const denied=await h.send({kind:"reader_posts",posts:[next]});
   assert.equal(denied.status,"PAIR_REQUIRED");
   assert.equal(h.transfers.length,0);
   assert.equal(h.seenState.truthSeenIds.includes(next.id),false);
@@ -387,21 +410,21 @@ test("Unpaired extension never transfers and pairs through popup only", async ()
   assert.equal(h.pairingRequests[0].options.body,JSON.stringify({code:"A".repeat(20)}));
   assert.equal(h.storageRestricted(),true);
   assert.equal((await h.popup("background_status")).local_paired,true);
-  const ok=await h.send({kind:"posts",posts:[next]});
+  const ok=await h.send({kind:"reader_posts",posts:[next]});
   assert.equal(ok.status,"TRANSFERRED");
   assert.equal(h.transfers[0].options.headers["X-Trade-Alert-Token"], "b".repeat(64));
 });
 
 test("Invalid token revokes local authorization and never marks post delivered", async () => {
   const h=harness();
-  await h.send({kind:"posts",posts:[original]});
+  await h.send({kind:"reader_posts",posts:[original]});
   h.setBridgeUnauthorized(true);
   const next={...original,id:"117406359223020085"};
-  const first=await h.send({kind:"posts",posts:[next]});
+  const first=await h.send({kind:"reader_posts",posts:[next]});
   assert.equal(first.status,"PAIR_REQUIRED");
   assert.equal(h.seenState.truthLocalToken,undefined);
   assert.equal(h.seenState.truthSeenIds.includes(next.id),false);
-  const again=await h.send({kind:"posts",posts:[next]});
+  const again=await h.send({kind:"reader_posts",posts:[next]});
   assert.equal(again.status,"PAIR_REQUIRED");
   assert.equal(h.transfers.length,1);
 });
@@ -409,7 +432,7 @@ test("Invalid token revokes local authorization and never marks post delivered",
 
 test("Image URLs reach local bridge only from approved Truth Social CDN", async () => {
   const h=harness();
-  await h.send({kind:"posts",posts:[original]});
+  await h.send({kind:"reader_posts",posts:[original]});
   const next={
     ...original,id:"117407758597840565",
     content:"<p>The Dumocrats are Scammers. These are the real FACTS!</p>",
@@ -419,7 +442,7 @@ test("Image URLs reach local bridge only from approved Truth Social CDN", async 
       preview_url:"https://static-assets-2.truthsocial.com/media/thumb.png"
     }]
   };
-  const result=await h.send({kind:"posts",posts:[next]});
+  const result=await h.send({kind:"reader_posts",posts:[next]});
   assert.equal(result.count,1);
   const transferred=JSON.parse(h.transfers.at(-1).options.body);
   assert.equal(transferred.media_attachments[0].type,"image");
@@ -432,7 +455,7 @@ test("Image URLs reach local bridge only from approved Truth Social CDN", async 
 
 test("Image metadata from untrusted Truth Social page cannot create SSRF URL", async () => {
   const h=harness();
-  await h.send({kind:"posts",posts:[original]});
+  await h.send({kind:"reader_posts",posts:[original]});
   const next={
     ...original,id:"117407758597840565",
     media_attachments:[
@@ -442,7 +465,7 @@ test("Image metadata from untrusted Truth Social page cannot create SSRF URL", a
        preview_url:"file:///C:/secret"}
     ]
   };
-  await h.send({kind:"posts",posts:[next]});
+  await h.send({kind:"reader_posts",posts:[next]});
   const transferred=JSON.parse(h.transfers.at(-1).options.body);
   assert.equal(transferred.media_attachments.length,2);
   assert.equal(transferred.media_attachments[0].type,"image");
