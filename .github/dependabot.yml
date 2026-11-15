@@ -1,48 +1,36 @@
 version: 2
 
-updates:
-  - package-ecosystem: "pip"
-    directory: "/"
+# One weekly pull request for all version updates (every ecosystem), so the
+# strict up-to-date branch rule needs a single CI run. Security updates are
+# not part of this group and still open immediately.
+multi-ecosystem-groups:
+  weekly-dependencies:
     schedule:
-      interval: "weekly"
-      day: "saturday"
+      interval: weekly
+      day: saturday
       time: "05:20"
-      timezone: "Europe/Stockholm"
+      timezone: Europe/Stockholm
     open-pull-requests-limit: 5
-    groups:
-      security-minor-patch:
-        applies-to: "security-updates"
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-      python-minor-patch:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
     commit-message:
       prefix: "chore(deps)"
 
-  - package-ecosystem: "github-actions"
+updates:
+  - package-ecosystem: "pip"
     directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "saturday"
-      time: "05:30"
-      timezone: "Europe/Stockholm"
-    open-pull-requests-limit: 5
+    multi-ecosystem-group: weekly-dependencies
+    patterns: ["*"]
     groups:
       security-minor-patch:
         applies-to: "security-updates"
         patterns: ["*"]
         update-types: ["minor", "patch"]
-      actions-minor-patch:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-    commit-message:
-      prefix: "chore(deps)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    multi-ecosystem-group: weekly-dependencies
+    patterns: ["*"]
+    groups:
+      security-minor-patch:
+        applies-to: "security-updates"
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
