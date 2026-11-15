@@ -12,7 +12,7 @@ const relay = fs.readFileSync(
   path.join(__dirname, "..", "chrome_extension", "relay.js"), "utf8"
 );
 
-function rig(initialAllowed) {
+function rig(initialAllowed, {pendingFetch = false} = {}) {
   const origin = "https://truthsocial.com";
   const listeners = new Map();
   const timers = [];
@@ -20,6 +20,7 @@ function rig(initialAllowed) {
   let permitted = initialAllowed;
   let fetches = 0;
   let modeChecks = 0;
+  let abortFetch;
   const location = {origin, hostname:"truthsocial.com", pathname:"/@realDonaldTrump"};
   const window = {
     addEventListener(name, fn) {
@@ -46,8 +47,11 @@ function rig(initialAllowed) {
       }
     }
   };
-  const fetch = async () => {
+  const fetch = async (url, options) => {
     fetches++;
+    if (pendingFetch) return new Promise((resolve, reject) => {
+      options.signal?.addEventListener("abort", () => reject(Error("timed out")), {once: true});
+    });
     return {
       ok:true, status:200,
       async json() {
@@ -62,6 +66,12 @@ function rig(initialAllowed) {
   };
   vm.runInNewContext(reader, {
     window, location, console, fetch,
+    AbortSignal: {timeout(ms) {
+      assert.equal(ms, 8000);
+      const controller = new AbortController();
+      abortFetch = () => controller.abort();
+      return controller.signal;
+    }},
     setTimeout(fn, ms) {timers.push({fn,ms});return timers.length;},
     clearTimeout() {},
     performance:{now(){return 250;}},
@@ -69,7 +79,8 @@ function rig(initialAllowed) {
   return {
     timers, events, get fetches(){return fetches;},
     get modeChecks(){return modeChecks;},
-    permit(value){permitted=value;}
+    permit(value){permitted=value;},
+    abortFetch(){assert.ok(abortFetch, "The backup request must have a deadline");abortFetch();}
   };
 }
 
@@ -103,6 +114,16 @@ test("Repeated BG-active page polls never duplicate the background network reque
   }
   assert.equal(h.fetches,0);
   assert.equal(h.modeChecks,4);
+});
+
+test("A stalled backup request aborts, reports failure and schedules the next poll", async () => {
+  const h = rig(true, {pendingFetch: true});
+  await flush();
+  assert.equal(h.fetches, 1);
+  h.abortFetch();
+  await flush();
+  assert.ok(h.events.some(e => e.type === "health" && e.status === "ERROR"));
+  assert.ok(h.timers.some(t => t.ms === 60000));
 });
 
 test("Relay reports service-worker mode without leaking extension settings", async () => {

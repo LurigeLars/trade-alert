@@ -67,7 +67,8 @@
       const response = await fetch(API, {
         credentials: "same-origin",
         cache: "no-store",
-        headers: {Accept: "application/json"}
+        headers: {Accept: "application/json"},
+        signal: AbortSignal.timeout(8000)
       });
       if (!response.ok) {
         report("health", {status: "HTTP_" + response.status});

@@ -41,6 +41,10 @@ The app fetches images only from approved Truth Social public static-asset
 hosts, sends no image to an AI provider, and labels OCR-derived evidence.
 [Setup and limits](docs/chrome-bridge.md#local-public-image-ocr-extension-v050).
 
+The Chrome extension requires Chrome 120 or newer. Backup-tab requests have an
+eight-second deadline; a timed-out request reports an error and retries with
+the existing backoff instead of stalling the reader.
+
 An optional [local Chrome bridge](docs/chrome-bridge.md) transfers newly
 observed posts from Chrome to the Windows app via a **silent localhost
 HTTP POST** on 127.0.0.1:18761. Extension v0.4.0 requires one-time user-approved pairing and a bearer token pinned to the exact Chrome extension Origin. The [pairing instructions](docs/chrome-bridge.md#authenticated-chrome-to-windows-pairing-extension-v040) explain how to obtain the short-lived code locally. Extension v0.3.0 and later no longer use Chrome

@@ -51,7 +51,8 @@ test("Healthy monitor uses ON rather than BG, and errors retain honest badges", 
   assert.ok(worker.includes('badge = "OFF"'));
   assert.ok(worker.includes("Trump Monitor ON"));
   assert.equal(manifest.name,"Trade Alert - Trump Monitor");
-  assert.equal(manifest.version,"0.5.0");
+  assert.equal(manifest.version,"0.5.1");
+  assert.equal(manifest.minimum_chrome_version,"120");
   assert.ok(worker.includes("safePublicImageUrl"));
   assert.ok(worker.includes("sanitizedMedia"));
   assert.ok(!manifest.permissions.includes("downloads"));
