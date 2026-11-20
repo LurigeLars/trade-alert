@@ -4,111 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Trade Alert · Trump Monitor</title>
-<style>
-  :root {
-    color-scheme: dark;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    font-size: 13px;
-  }
-  * { box-sizing: border-box; }
-  body {
-    width: 320px;
-    min-height: 440px;
-    padding: 16px;
-    margin: 0;
-    color: #f6f9ff;
-    /* The account's public portrait also appears in the user-provided artwork.
-       The first color/gradient remain as fallback if the CDN is unavailable. */
-    background-color: #111a29;
-    background-image:
-      linear-gradient(180deg, rgba(8,16,29,.37), rgba(8,16,29,.48) 48%, rgba(7,12,21,.65)),
-      url("https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/accounts/avatars/107/780/257/626/128/497/original/454286ac07a6f6e6.jpeg");
-    background-size: cover;
-    background-position: center center;
-    background-attachment: fixed;
-  }
-  h1, .status, .note {
-    background: rgba(10, 21, 36, .88);
-    border: 1px solid rgba(151, 185, 220, .55);
-    box-shadow: 0 4px 14px rgba(0,0,0,.38);
-    border-radius: 12px;
-    backdrop-filter: blur(3px);
-  }
-  h1 {
-    display: table;
-    max-width: 100%;
-    padding: 9px 10px;
-    margin: 0 0 16px;
-    font-size: 17px;
-    font-weight: 700;
-    line-height: 1.32;
-    text-shadow: 0 1px 2px #070a11;
-  }
-  .status {
-    padding: 12px 13px;
-    min-height: 90px;
-    margin-bottom: 16px;
-    white-space: pre-wrap;
-    line-height: 1.65;
-    font-variant-numeric: tabular-nums;
-    overflow-wrap: anywhere;
-  }
-  button {
-    display: block;
-    width: 100%;
-    padding: 13px 12px;
-    margin: 9px 0;
-    border: 1px solid rgba(158,195,232,.72);
-    border-radius: 11px;
-    background: rgba(28, 48, 72, .89);
-    color: #fff;
-    font: 600 13px system-ui, sans-serif;
-    text-align: left;
-    box-shadow: 0 4px 13px rgba(0,0,0,.3);
-    text-shadow: 0 1px 1px rgba(0,0,0,.35);
-    cursor: pointer;
-  }
-  button:hover { background: rgba(45, 74, 107, .94); }
-  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  button:disabled { opacity: .6; cursor: wait; }
-  .pair-input {
-    display: block;
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 9px;
-    border: 1px solid rgba(158,195,232,.72);
-    color: #fff;
-    background: rgba(10,21,36,.94);
-    letter-spacing: .08em;
-    font: 600 13px ui-monospace, monospace;
-  }
-  .pair-label { display: block; font-weight: 700; margin-bottom: 7px; }
-  .pair-feedback { margin: 5px 0 12px; min-height: 17px; }
-  .note {
-    padding: 11px 12px;
-    margin: 17px 0 0;
-    color: #eef2fb;
-    font-size: 12px;
-    line-height: 1.55;
-  }
-</style>
+<link rel="stylesheet" href="popup.css">
 </head>
 <body>
-<h1>Trade Alert · Trump Monitor</h1>
-<div id="status" class="status" role="status" aria-live="polite">Checking monitor status…</div>
-<section class="note" aria-label="Local pairing">
-  <label class="pair-label" for="pair-code">One-time local pairing code</label>
-  <input id="pair-code" class="pair-input" type="text" maxlength="20"
-         placeholder="Paste 20-character code" spellcheck="false"
-         autocomplete="off" autocapitalize="characters">
-  <button id="pair" type="button">Pair with Windows Trade Alert</button>
-  <div id="pair-feedback" class="pair-feedback" role="status" aria-live="polite"></div>
-  <small>Generate a code in PowerShell: <code>python -m trade_alert.chrome_pairing pair</code>. The code expires in 10 minutes.</small>
+<header><div><span class="eyebrow">TRADE ALERT</span><h1>Trump Monitor</h1></div><span id="pair-status" role="status">Checking…</span></header>
+<main>
+<section class="monitor" aria-label="Background monitor">
+  <div class="monitor-top"><h2>Background monitor</h2><button id="power" type="button" role="switch" aria-checked="false" aria-label="Background monitoring" disabled><span class="dot" aria-hidden="true"></span><span id="power-label">—</span></button></div>
+  <p id="status" role="status">Checking monitor status…</p>
+  <p class="hint">Keep Chrome running.</p>
 </section>
-<button id="test" type="button">Activate Trump Monitor</button>
-<button id="off" type="button">Disable Trump Monitor</button>
-<button id="open" type="button">Backup Monitor</button>
-<p class="note">ON means background monitoring is responding. Keep Chrome running. HTTP 429 means requests are rate limited; monitoring pauses for at least 30 minutes. If 403 appears, use Backup Monitor to open the account tab.</p>
+<p id="notice" role="status" hidden></p>
+<button id="open" class="backup" type="button" disabled>Backup Monitor <span aria-hidden="true">↗</span></button>
+<p id="feedback" role="status"></p>
+<details id="pairing" hidden><summary id="pairing-summary">Pair with Trade Alert</summary>
+  <form id="pair-form"><label for="pair-code">One-time pairing code</label><div class="pair-fields"><input id="pair-code" type="text" maxlength="20" required pattern="[A-Fa-f0-9]{20}" placeholder="20-character code" spellcheck="false" autocomplete="off" autocapitalize="characters"><button id="pair" type="submit" disabled>Pair</button></div>
+  <p id="pair-feedback" role="status"></p>
+  <p class="hint">Generate a code in PowerShell:<br><code>python -m trade_alert.chrome_pairing pair</code><br>Valid for 10 minutes.</p></form>
+</details>
+<details id="diagnostics"><summary>Details</summary><dl><div><dt>Background</dt><dd id="background-status">—</dd></div><div><dt>Last check</dt><dd id="checked">—</dd></div><div><dt>Tab backup</dt><dd id="tab-status">—</dd></div><div><dt>Local delivery</dt><dd id="delivery-status">—</dd></div></dl></details>
+</main>
 <script src="popup.js"></script>
 </body>
 </html>
