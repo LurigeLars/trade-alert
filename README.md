@@ -61,9 +61,14 @@ Truth Social every ~30 seconds when enabled. This source may still receive
 HTTP 403 or 429; the silent local relay does not alter source access,
 timeouts or rate limits. No browser cookies, credentials, proxy rotation
 or debugging-port access are involved.
-The Chrome popup is English-only, shows **ON** for a successful background
-poll, and uses the public portrait avatar with dark readable overlays and a
-dark fallback if the image CDN is unavailable.
+The English Chrome popup (extension **0.5.2**) has one **ON/OFF** switch for
+background monitoring, a short source-health status, and **Backup Monitor**.
+Enabling still verifies background access before turning monitoring on. The
+switch shows the enabled setting; the toolbar badge shows **ON** only after a
+recent successful background poll. Rate limits, denied access and failed local
+delivery remain visible without opening **Details**. Routine diagnostics are
+collapsed, and pairing opens only when needed, with **Pair again** available
+after setup. The public Trump portrait and dark fallback remain in place.
 
 Trump-account messages across the Chrome bridge, direct API and RSS archive
 now use one [source-scoped multi-asset impact filter](docs/trump-market-impact-filter.md)

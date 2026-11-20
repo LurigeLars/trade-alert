@@ -1,0 +1,46 @@
+:root { color-scheme: dark; font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #f4f7fc; }
+* { box-sizing: border-box; }
+body {
+  width: 360px; min-height: 450px; max-height: 600px; overflow-y: auto;
+  padding: 22px 20px; margin: 0;
+  background-color: #111a29;
+  background-image: linear-gradient(180deg, rgba(8,16,29,.2), rgba(8,16,29,.3) 32%, rgba(7,12,21,.85)), url("https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/accounts/avatars/107/780/257/626/128/497/original/454286ac07a6f6e6.jpeg");
+  background-size: cover; background-position: center center; background-attachment: fixed;
+}
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 90px; text-shadow: 0 1px 7px #050a12, 0 1px 3px #050a12; }
+.eyebrow { font-size: 10px; font-weight: 650; letter-spacing: .18em; color: #d0daea; }
+h1 { margin: 2px 0 0; font-size: 23px; letter-spacing: -.03em; }
+#pair-status { font-size: 11px; padding: 4px 8px; border-radius: 20px; background: rgba(10,21,36,.88); color: #d0daea; }
+#pair-status[data-paired="true"] { color: #a4e6c0; }
+.monitor { padding: 16px; border: 1px solid rgba(151,185,220,.4); border-radius: 15px; background: rgba(10,21,36,.88); box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.monitor-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+h2 { margin: 0; font-size: 15px; font-weight: 650; }
+button, input { font: inherit; border: 1px solid rgba(158,195,232,.5); color: inherit; border-radius: 9px; }
+button { padding: 10px 13px; font-weight: 650; background: rgba(28,48,72,.89); cursor: pointer; }
+button:hover { filter: brightness(1.12); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid #b8deff; outline-offset: 3px; }
+button:disabled { opacity: .6; cursor: wait; }
+#power { min-width: 78px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #374658; }
+#power[aria-checked="true"] { color: #10291c; background: #9ce6ba; border-color: #9ce6ba; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+p { margin: 10px 0 0; }
+#status { font-size: 13px; color: #d0daea; }
+#status[data-tone="ok"] { color: #a4e6c0; }
+#status[data-tone="warning"] { color: #ffdb9e; }
+#status[data-tone="error"] { color: #ffc0b7; }
+.hint { font-size: 11px; color: #c1cddd; }
+.backup { display: flex; width: 100%; justify-content: space-between; margin-top: 12px; text-align: left; background: rgba(10,21,36,.88); }
+#notice, #feedback, #pair-feedback { font-size: 12px; color: #ffdb9e; }
+#notice, #feedback:not(:empty) { padding: 10px 12px; border-radius: 9px; background: rgba(10,21,36,.94); }
+#feedback:empty, #pair-feedback:empty { display: none; }
+details { margin-top: 12px; padding: 10px 12px; border-radius: 9px; background: rgba(10,21,36,.88); }
+summary { cursor: pointer; font-size: 12px; color: #d0daea; }
+form { margin-top: 14px; }
+label { display: block; font-size: 12px; margin-bottom: 7px; }
+.pair-fields { display: flex; gap: 8px; }
+input { width: 100%; min-width: 0; padding: 9px; background: #111e30; }
+code { overflow-wrap: anywhere; }
+dl { margin: 12px 0 0; font-size: 11px; }
+dl div { display: flex; justify-content: space-between; gap: 10px; margin-top: 7px; }
+dt { color: #c1cddd; }
+dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
