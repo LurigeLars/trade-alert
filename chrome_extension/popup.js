@@ -56,10 +56,6 @@ function show(response) {
     : response.delivery_status === "BRIDGE_OFFLINE" ? "Last local delivery failed. Check that Trade Alert is running."
     : response.delivery_status === "PAIR_REQUIRED" ? "Local delivery needs pairing again." : "";
   notice.hidden = !notice.textContent;
-  document.getElementById("background-status").textContent = response.status || "NOT_TESTED";
-  document.getElementById("checked").textContent = time(response.checked);
-  document.getElementById("tab-status").textContent = (response.tab_status || "NOT_TESTED") + " · " + time(response.tab_checked);
-  document.getElementById("delivery-status").textContent = (response.delivery_status || "NOT_TESTED") + " · " + time(response.delivery_checked);
 }
 async function action(kind) {
   const focused = document.activeElement;

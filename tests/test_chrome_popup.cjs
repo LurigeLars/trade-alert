@@ -10,7 +10,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 async function popup(overrides = {}, options = {}) {
   const state = {enabled: true, status: "HTTP_200", checked: new Date().toISOString(),
     local_paired: true, tab_status: "NOT_TESTED", delivery_status: "QUEUED", ...overrides};
-  const nodes = Object.fromEntries(["status", "power", "power-label", "open", "pair", "pair-code", "pair-feedback", "feedback", "pairing", "notice", "pair-status", "pairing-summary", "background-status", "checked", "tab-status", "delivery-status", "pair-form"].map(id => [id, {
+  const nodes = Object.fromEntries(["status", "power", "power-label", "open", "pair", "pair-code", "pair-feedback", "feedback", "pairing", "notice", "pair-status", "pairing-summary", "pair-form"].map(id => [id, {
     textContent: "", value: "", disabled: true, hidden: true, open: false, dataset: {}, attrs: {}, listeners: {},
     setAttribute(k,v) {this.attrs[k] = v;}, addEventListener(k,v) {this.listeners[k] = v;}, focus() {}
   }]));
@@ -155,7 +155,7 @@ test("portrait, permissions and background delivery safeguards are preserved", (
   assert.match(css, /linear-gradient/);
   assert.match(css, /:focus-visible/);
   for (const badge of ["ON", "TAB", "429", "OFF"]) assert.ok(worker.includes(`badge = "${badge}"`));
-  assert.equal(manifest.version, "0.5.2");
+  assert.equal(manifest.version, "0.5.3");
   assert.deepEqual(manifest.permissions, ["storage", "alarms"]);
   assert.ok(worker.includes("TRUSTED_CONTEXTS"));
   assert.ok(worker.includes("X-Trade-Alert-Token"));
