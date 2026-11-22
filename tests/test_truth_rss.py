@@ -65,12 +65,19 @@ class RSSIntakeTests(unittest.IsolatedAsyncioTestCase):
                                             notification=lambda *a: messages.append(a) or True)
                 self.assertEqual(first["status"], "BASELINED")
                 self.assertEqual(len(messages), 0)
-                second = await read_rss_once(cfg, store, fetch=fetch, now=T0+45,
-                                             notification=lambda *a: messages.append(a) or True)
+                with patch("trade_alert.truth_rss.notify", return_value=True) as sender:
+                    second = await read_rss_once(cfg, store, fetch=fetch, now=T0+45)
                 self.assertEqual(second["notified"], 1)
                 self.assertEqual(store.unread_alert_count(), 1)
-                self.assertIn("oberoende RSS", messages[0][1])
-                self.assertIn("trumpstruth.org/statuses/12", store.recent_alerts()[0].link)
+                self.assertEqual(
+                    ("GEOPOLITICS", updated.posts[1].text), sender.call_args.args,
+                )
+                self.assertEqual(
+                    "RSS-arkiv · ej verifierad primärkälla", sender.call_args.kwargs["attribution"],
+                )
+                alert, = store.recent_alerts()
+                self.assertIn("Evidens: UNRESOLVED · EJ KONTROLLERAD", alert.body)
+                self.assertIn("trumpstruth.org/statuses/12", alert.link)
                 third = await read_rss_once(cfg, store, fetch=fetch, now=T0+65,
                                             notification=lambda *a: self.fail("duplicate"))
                 self.assertEqual(third["notified"], 0)

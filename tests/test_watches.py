@@ -107,17 +107,22 @@ class WatchAlertTests(unittest.IsolatedAsyncioTestCase):
         result, sender = await self._run(
             Config(watches=(MSFT,)), [headline("Microsoft 365 outage spreads", item_id="m1")])
         self.assertEqual(1, result["notified"])
-        title, body = sender.call_args.args
-        self.assertEqual("Trade Alert · Microsoft", title)
-        self.assertIn("bevakning Microsoft", body)
+        self.assertEqual(("Microsoft", "Microsoft 365 outage spreads"), sender.call_args.args)
 
     async def test_oil_watch_can_be_switched_off(self):
         oil = headline("Oil supply disruption after pipeline attack", item_id="o1")
-        on, _ = await self._run(Config(), [oil])
+        on, oil_sender = await self._run(Config(), [oil])
         off, sender = await self._run(Config(oil_watch_enabled=False), [oil])
         self.assertEqual(1, on["notified"])
+        self.assertEqual(("ENERGY", oil.title), oil_sender.call_args.args)
         self.assertEqual(0, off["notified"])
         sender.assert_not_called()
+
+    async def test_news_without_a_topic_uses_provider(self):
+        item = headline("Microsoft 365 outage spreads")
+        result, sender = await self._run(Config(notification_min_score=0), [item])
+        self.assertEqual(1, result["notified"])
+        self.assertEqual(("Reuters", item.title), sender.call_args.args)
 
 
 class SettingsHelperTests(unittest.TestCase):
