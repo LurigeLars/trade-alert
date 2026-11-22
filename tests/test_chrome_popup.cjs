@@ -10,13 +10,13 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 async function popup(overrides = {}, options = {}) {
   const state = {enabled: true, status: "HTTP_200", checked: new Date().toISOString(),
     local_paired: true, tab_status: "NOT_TESTED", delivery_status: "QUEUED", ...overrides};
-  const nodes = Object.fromEntries(["status", "power", "power-label", "open", "pair", "pair-code", "pair-feedback", "feedback", "pairing", "notice", "pair-status", "pairing-summary", "pair-form"].map(id => [id, {
+  const nodes = Object.fromEntries(["status", "power", "power-label", "pair", "pair-code", "pair-feedback", "feedback", "pairing", "notice", "pair-status", "pairing-summary", "pair-form"].map(id => [id, {
     textContent: "", value: "", disabled: true, hidden: true, open: false, dataset: {}, attrs: {}, listeners: {},
     setAttribute(k,v) {this.attrs[k] = v;}, addEventListener(k,v) {this.listeners[k] = v;}, focus() {}
   }]));
-  const calls = []; let closed = false;
+  const calls = [];
   vm.runInNewContext(source, {
-    document: {getElementById: id => nodes[id]}, window: {close() {closed = true;}},
+    document: {getElementById: id => nodes[id]},
     chrome: {runtime: {sendMessage: async message => {
       calls.push(message);
       if (message.kind === options.fail) throw Error("Synthetic worker failure");
@@ -29,12 +29,11 @@ async function popup(overrides = {}, options = {}) {
         if (options.pairStatus) return {status: options.pairStatus};
         state.local_paired = true; return {status: "PAIRED"};
       }
-      if (message.kind === "open_tab") return {status: options.openStatus || "TAB_OPENED"};
       return {...state};
     }}}
   });
   await flush();
-  return {nodes, calls, closed: () => closed};
+  return {nodes, calls};
 }
 
 test("paired popup has one accessible ON/OFF control and collapses setup", async () => {
@@ -136,16 +135,6 @@ test("unknown state leaves the switch disabled, with no false ON claim", async (
   }
 });
 
-test("backup closes the popup only after the worker confirms opening a tab", async () => {
-  const good = await popup();
-  await good.nodes.open.listeners.click();
-  assert.equal(good.closed(), true);
-  const bad = await popup({}, {openStatus: "ERROR"});
-  await bad.nodes.open.listeners.click();
-  assert.equal(bad.closed(), false);
-  assert.match(bad.nodes.feedback.textContent, /Could not communicate/);
-});
-
 test("portrait, permissions and background delivery safeguards are preserved", () => {
   const css = fs.readFileSync(path.join(extension, "popup.css"), "utf8");
   const worker = fs.readFileSync(path.join(extension, "background.js"), "utf8");
@@ -155,7 +144,7 @@ test("portrait, permissions and background delivery safeguards are preserved", (
   assert.match(css, /linear-gradient/);
   assert.match(css, /:focus-visible/);
   for (const badge of ["ON", "TAB", "429", "OFF"]) assert.ok(worker.includes(`badge = "${badge}"`));
-  assert.equal(manifest.version, "0.5.3");
+  assert.equal(manifest.version, "0.5.4");
   assert.deepEqual(manifest.permissions, ["storage", "alarms"]);
   assert.ok(worker.includes("TRUSTED_CONTEXTS"));
   assert.ok(worker.includes("X-Trade-Alert-Token"));

@@ -29,7 +29,6 @@ p { margin: 10px 0 0; }
 #status[data-tone="warning"] { color: #ffdb9e; }
 #status[data-tone="error"] { color: #ffc0b7; }
 .hint { font-size: 11px; color: #c1cddd; }
-.backup { display: flex; width: 100%; justify-content: space-between; margin-top: 12px; text-align: left; background: rgba(10,21,36,.88); }
 #notice, #feedback, #pair-feedback { font-size: 12px; color: #ffdb9e; }
 #notice, #feedback:not(:empty) { padding: 10px 12px; border-radius: 9px; background: rgba(10,21,36,.94); }
 #feedback:empty, #pair-feedback:empty { display: none; }

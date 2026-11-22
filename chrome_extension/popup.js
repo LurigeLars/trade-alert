@@ -6,7 +6,7 @@ const pairFeedback = document.getElementById("pair-feedback");
 const feedback = document.getElementById("feedback");
 const pairing = document.getElementById("pairing");
 const notice = document.getElementById("notice");
-const controls = [power, document.getElementById("open"), document.getElementById("pair")];
+const controls = [power, document.getElementById("pair")];
 let enabled = null, paired;
 const call = (kind, extra = {}) => chrome.runtime.sendMessage({kind, ...extra});
 function busy(value) {
@@ -43,7 +43,7 @@ function show(response) {
   } else if (tabActive) {
     text = "Backup tab is active"; tone = "ok";
   } else if (recent(response.checked) && ["HTTP_401", "HTTP_403"].includes(response.status)) {
-    text = "Access denied · try Backup Monitor"; tone = "error";
+    text = "Access denied · open the account tab"; tone = "error";
   } else if (recent(response.checked) && !["HTTP_200", "NOT_TESTED"].includes(response.status)) {
     text = "Background source unavailable"; tone = "error";
   } else if (!enabled && recent(response.tab_checked) && ["HTTP_401", "HTTP_403", "ERROR"].includes(response.tab_status)) {
@@ -64,10 +64,6 @@ async function action(kind) {
   try {
     if (kind !== "background_status") {
       const result = await call(kind);
-      if (kind === "open_tab") {
-        if (result?.status !== "TAB_OPENED") throw Error("Tab not opened");
-        window.close(); return;
-      }
       if (result?.status === "BUSY") feedback.textContent = "A check is already running. Try again shortly.";
     }
     show(await call("background_status"));
@@ -80,7 +76,6 @@ async function action(kind) {
   }
 }
 power.addEventListener("click", () => action(enabled ? "background_off" : "background_test"));
-document.getElementById("open").addEventListener("click", () => action("open_tab"));
 document.getElementById("pair-form").addEventListener("submit", async event => {
   event.preventDefault();
   const code = pairCode.value.trim().toUpperCase(); pairCode.value = "";
