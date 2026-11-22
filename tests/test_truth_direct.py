@@ -153,7 +153,8 @@ class DirectIntakeTests(unittest.IsolatedAsyncioTestCase):
                     notification=lambda *args: notifications.append(args) or True)
                 self.assertEqual(b["notified"], 1)
                 self.assertEqual(store.unread_alert_count(), 1)
-                self.assertIn("Truth Social", notifications[0][1])
+                self.assertEqual([("GEOPOLITICS", "Iran negotiations continue")], notifications)
+                self.assertIn("Truth Social", store.recent_alerts()[0].body)
                 c = await read_direct_once(
                     config, store, fetch=fetch, now=T0+35,
                     notification=lambda *_: self.fail("duplicate"))

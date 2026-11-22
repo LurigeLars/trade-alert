@@ -53,9 +53,8 @@ def _setup_logging(verbose: bool = False) -> None:
 def _notification(
     item: Headline, score: int, watches: tuple[str, ...] = (), *, oil_hit: bool = True,
 ) -> tuple[str, str]:
-    provider = item.provider or item.source
-    label = ", ".join(watches) if watches and not oil_hit else provider
-    title = f"Trade Alert · {label}"
+    topic = "ENERGY" if oil_hit and score > 0 else item.provider or item.source
+    title = ", ".join(watches) or topic
     urgency = "TOP · " if item.urgency == 1 else ""
     reasons = [f"relevans {score}"] if oil_hit else []
     if watches:
@@ -190,7 +189,8 @@ async def run_once(
             title, body = _notification(item, score, watches, oil_hit=oil_hit)
             alerted, sent = deliver_alert(
                 store, title=title, item_key=item.key, source=item.source,
-                provider=item.provider, headline=item.title, body=body, score=score,
+                provider=item.provider, headline=item.title, body=body,
+                toast_body=item.title, score=score,
                 published=item.published, dedupe_key=item.dedupe_key, link=item.link, at=now,
                 alert_callback=alert_callback, send=notify,
             )

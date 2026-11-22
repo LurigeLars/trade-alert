@@ -18,8 +18,8 @@ hourly Portfolio Watch. Trade Alert does not scrape or call Truth Social.
 - First successful poll baselines history without notifying.
 - Stable RSS GUID dedupe via local operational StateStore; only fresh, relevant
   posts trigger Windows notifications and unread local alert history.
-- Show archive attribution, original RSS publication timestamp and
-  publication-to-alert delay. Publisher clock and archive delay are not proven.
+- The Windows toast shows the excerpt and an archive-source warning below it.
+  The stored alert also records the RSS timestamp and publication-to-alert delay.
 - Failures logged; no broker access or automatic orders.
 
 ## Settings (local config.json)

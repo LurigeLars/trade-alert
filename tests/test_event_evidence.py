@@ -154,9 +154,13 @@ class EvidenceIntakeTests(unittest.IsolatedAsyncioTestCase):
                     )
                 self.assertEqual(output["alerted"], 1)
                 self.assertEqual(output["notified"], 1)
-                self.assertIn("STANDARD", notices[0][0])
-                self.assertIn("Evidens: DATA_CONTEXT", notices[0][1])
-                self.assertIn("EJ KONTROLLERAD", notices[0][1])
+                self.assertEqual(
+                    [("GEOPOLITICS", "[Bildtext via lokal OCR] 159 IRANIAN SHIPS Other Presidents Trump")],
+                    notices,
+                )
+                alert, = store.recent_alerts()
+                self.assertIn("STANDARD / GEOPOLITICS", alert.body)
+                self.assertIn("Evidens: DATA_CONTEXT · EJ KONTROLLERAD", alert.body)
                 self.assertEqual(1, store.unread_alert_count())
             finally:
                 store.close()
@@ -183,9 +187,13 @@ class EvidenceIntakeTests(unittest.IsolatedAsyncioTestCase):
                         notification=lambda *args: notices.append(args) or True,
                     )
                 self.assertEqual(output["alerted"], 1)
-                self.assertIn("HIGH", notices[0][0])
-                self.assertIn("Evidens: ACTION_CLAIM", notices[0][1])
-                self.assertIn("EJ KONTROLLERAD", notices[0][1])
+                self.assertEqual(
+                    [("TRADE", f"{result.posts[0].text}\n[Bildtext via lokal OCR] {POLICY_REPORT[:650]}")],
+                    notices,
+                )
+                alert, = store.recent_alerts()
+                self.assertIn("HIGH / TRADE", alert.body)
+                self.assertIn("Evidens: ACTION_CLAIM · EJ KONTROLLERAD", alert.body)
             finally:
                 store.close()
 

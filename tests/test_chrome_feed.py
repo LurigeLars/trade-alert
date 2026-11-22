@@ -57,14 +57,25 @@ class ChromeBridgeTests(unittest.TestCase):
                               notification=lambda *x: notices.append(x) or True)
         self.assertEqual(a["alerts"], 1)
         self.assertEqual(a["notified"], 1)
-        self.assertIn("Iran", notices[0][1])
-        self.assertEqual(len(self.store.recent_alerts()), 1)
+        self.assertEqual([("GEOPOLITICS", "Trump will not attack Iran")], notices)
+        alert, = self.store.recent_alerts()
+        self.assertIn("Trump · HIGH / GEOPOLITICS · Chrome-källa", alert.body)
+        self.assertIn("Evidens: UNRESOLVED · EJ KONTROLLERAD", alert.body)
         self.assertEqual(list(self.folder.iterdir()), [])
         emit(self.folder, row(ID1, self.now - 8))
         b = poll_browser_feed(self.config, self.store, directory=self.folder,
                               at=self.now, notification=lambda *_: self.fail("duplicate"))
         self.assertEqual(b["duplicates"], 1)
         self.assertEqual(b["alerts"], 0)
+
+    def test_no_category_uses_trump_as_toast_title(self):
+        self.config.notification_min_score = 0
+        emit(self.folder, row(ID1, self.now - 4, text="Happy birthday"))
+        with patch("trade_alert.chrome_feed.notify", return_value=True) as sender:
+            result = poll_browser_feed(self.config, self.store, directory=self.folder,
+                                       at=self.now)
+        self.assertEqual(result["notified"], 1)
+        self.assertEqual(("Trump", "Happy birthday"), sender.call_args.args)
 
     def test_wrong_account_and_id_mismatch_rejected(self):
         emit(self.folder, row(ID1, self.now - 4, account="not-the-account"))
@@ -107,10 +118,10 @@ class ChromeBridgeTests(unittest.TestCase):
         self.assertEqual(result["alerts"], 1)
         self.assertEqual(result["ocr_ok"], 1)
         self.assertEqual(result["notified"], 1)
-        self.assertIn("ENERGY", notices[0][0])
-        self.assertIn("[Bildtext via lokal OCR]", notices[0][1])
-        self.assertIn("CRUDE OIL ABOVE $100", notices[0][1])
-        self.assertIn(caption, notices[0][1])
+        self.assertEqual(
+            [("ENERGY", f"{caption}\n[Bildtext via lokal OCR] DAYS WITH CRUDE OIL ABOVE $100")],
+            notices,
+        )
         self.assertEqual(len(self.store.recent_alerts()), 1)
         ocr.assert_called_once()
         # Repeat the same post ID; no second OCR or duplicated alert.
