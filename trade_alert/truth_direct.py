@@ -21,7 +21,7 @@ from .config import Config
 from .trump_filter import classify_trump_statement
 from .event_evidence import assess_truth_evidence
 from .media_ocr import extract_image_text, image_url_from_post
-from .notifier import deliver_alert, notify
+from .notifier import deliver_alert, notify, trump_toast_title
 from .state import StateStore
 
 ACCOUNT_ID = "107780257626128497"
@@ -311,21 +311,22 @@ async def read_direct_once(config: Config, store: StateStore, *,
             store.mark_seen(key, at=moment)
             continue
         store.mark_seen(key, at=moment)
-        text = post.text[:450] or "[Ingen inläggstext]"
+        caption = post.text[:450]
         ocr_label = ("\n[Bildtext via lokal OCR] " + image_text[:650]) if image_text else ""
         body = (
             f"Trump · {signal.priority} / {signal.category} · Truth Social offentligt inlägg\n"
             f"Evidens: {evidence.event_kind} · EJ KONTROLLERAD\n"
-            f"{text}{ocr_label}\n"
+            f"{caption or '[Ingen inläggstext]'}{ocr_label}\n"
             f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
             f" · upptäckt +{int(max(0, age))} s\n"
             f"Bedömning: {evidence.reason}\n"
             "Ett nytt inlägg är inte bevis på en ny händelse."
         )
         alerted, sent = deliver_alert(
-            store, title=f"Trade Alert · Trump {signal.priority} · {signal.category}",
+            store, title=trump_toast_title(signal.category),
             item_key=key, source="TRUTH_PUBLIC", provider="Truth Social public account",
-            headline=analysis_text[:240], body=body, score=score,
+            headline=analysis_text[:240], body=body,
+            toast_body=f"{caption}{ocr_label}".lstrip("\n"), score=score,
             published=post.published, link=post.link, at=moment,
             alert_callback=alert_callback, notification=notification, send=notify,
         )

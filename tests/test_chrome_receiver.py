@@ -100,8 +100,7 @@ class LoopbackReceiverTests(unittest.TestCase):
             )
             self.assertEqual(result["alerts"], 1)
             self.assertEqual(result["notified"], 1)
-            self.assertEqual(len(notified), 1)
-            self.assertIn("HIGH", notified[0][0])
+            self.assertEqual([("DEFENSE", "We are deploying our Navy to Cuba.")], notified)
             self.assertFalse((self.directory /
                               ("post-" + POST_ID + ".json")).exists())
         finally:
