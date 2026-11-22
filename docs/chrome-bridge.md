@@ -84,12 +84,14 @@ image URL, **not bundled into the extension**, so if the CDN cannot be
 reached the popup retains a dark background fallback. No additional
 permissions, remote scripts or tracking calls are introduced.
 
-The controls are **Activate Trump Monitor**, **Disable Trump Monitor**,
-and **Backup Monitor**. The latter still opens the same first-party
-account tab. A successful background poll shows badge **ON** (previously
-**BG**); denied and failed requests continue to display **403** and
-**ERR**. These are UI-only changes: account verification, polling,
-local notifications and existing source cursors remain unchanged.
+The popup has one **ON/OFF** control for background monitoring. Since version
+**0.5.4**, the backup-account shortcut and Chrome reminder are omitted. Open
+`https://truthsocial.com/@realDonaldTrump` manually to use the account-tab reader
+when background monitoring is off and no source cooldown is active. A successful
+recent background poll shows badge **ON** (previously **BG**); denied and failed
+requests still show their error status. Source failures remain visible in the
+popup. Account verification, polling, local notifications and source cursors
+are unchanged.
 
 ## Optional tab-free test (Chrome MV3 background service worker)
 

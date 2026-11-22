@@ -61,8 +61,11 @@ Truth Social every ~30 seconds when enabled. This source may still receive
 HTTP 403 or 429; the silent local relay does not alter source access,
 timeouts or rate limits. No browser cookies, credentials, proxy rotation
 or debugging-port access are involved.
-The English Chrome popup (extension **0.5.3**) has one **ON/OFF** switch for
-background monitoring, a short source-health status, and **Backup Monitor**.
+The English Chrome popup (extension **0.5.4**) has one **ON/OFF** switch for
+background monitoring and a short source-health status. The backup shortcut and
+Chrome reminder are omitted; opening `https://truthsocial.com/@realDonaldTrump`
+manually still provides the account-tab reader when background monitoring is
+off and no source cooldown is active.
 Enabling still verifies background access before turning monitoring on. The
 switch shows the enabled setting; the toolbar badge shows **ON** only after a
 recent successful background poll. Rate limits, denied access and failed local
