@@ -310,9 +310,9 @@ class ChromePriorityIntegrationTests(unittest.TestCase):
                 )
                 self.assertEqual(result["alerts"], 1)
                 self.assertEqual(result["notified"], 1)
-                self.assertIn("HIGH", toasts[0][0])
-                self.assertIn("RATES", toasts[0][0])
-                self.assertEqual(len(store.recent_alerts()), 1)
+                self.assertEqual([("RATES", "Fed will fire Powell immediately over rates.")], toasts)
+                alert, = store.recent_alerts()
+                self.assertIn("HIGH / RATES", alert.body)
                 self.assertFalse(incoming.exists())
             finally:
                 store.close()

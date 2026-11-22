@@ -137,16 +137,22 @@ def alert_click(path: Path, item_key: str, on_read: Callable[[int], None] | None
     return click
 
 
+def trump_toast_title(category: str | None) -> str:
+    return category if category and category != "OTHER" else "Trump"
+
+
 def deliver_alert(
     store: StateStore, *, title: str, item_key: str, source: str, provider: str | None,
-    headline: str, body: str, score: int, published: float | None, link: str | None,
-    at: float, dedupe_key: str | None = None, alert_callback=None,
+    headline: str, body: str, toast_body: str, score: int,
+    published: float | None, link: str | None,
+    at: float, dedupe_key: str | None = None, attribution: str | None = None, alert_callback=None,
     notification: Callable[[str, str], bool] | None = None, send: Callable | None = None,
 ) -> tuple[bool, bool]:
     """Save an alert, refresh the unread badge and queue its toast: one path for every source.
 
+    Stores `body` in history and sends `toast_body` to Windows.
     Returns (alerted, sent). alerted is False for a duplicate or a silent startup replay.
-    `notification(title, body)` replaces the toast in tests; `send` lets callers pass
+    `notification(title, toast_body)` replaces the toast in tests; `send` lets callers pass
     their own module's `notify` so existing patches keep working.
     """
     if not store.record_alert(
@@ -160,12 +166,12 @@ def deliver_alert(
         except Exception:
             logging.exception('Unread badge callback failed')
     if notification is not None:
-        sent = bool(notification(title, body))
+        sent = bool(notification(title, toast_body))
     else:
         sent = bool((send or notify)(
-            title, body, item_key=item_key,
+            title, toast_body, item_key=item_key,
             on_click=alert_click(store.path, item_key, alert_callback),
-            published_at=published,
+            published_at=published, attribution=attribution,
         ))
     if not sent:
         logging.error('Alert %s saved unread, but the Windows notification failed', item_key)
@@ -193,6 +199,7 @@ class _PendingNotification:
     item_key: str
     on_click: Callable | None
     published_at: float | None
+    attribution: str | None = None
 
     @property
     def sort_key(self) -> float:
@@ -246,6 +253,7 @@ class _NotificationBurst:
         _notify_now(
             candidate.title, candidate.body,
             item_key=candidate.item_key, on_click=candidate.on_click,
+            attribution=candidate.attribution,
         )
 
     def discard(self) -> None:
@@ -271,28 +279,29 @@ def discard_pending_notifications() -> None:
 
 def notify(title: str, body: str, *, on_click: Callable | None = None,
            item_key: str | None = None, published_at: float | None = None,
-           coalesce: bool = True) -> bool:
+           coalesce: bool = True, attribution: str | None = None) -> bool:
     """Queue actionable Windows alerts by burst; tests remain immediate."""
     if os.name == 'nt' and item_key is not None and coalesce:
         return _burst.offer(_PendingNotification(
-            str(title), str(body), item_key, on_click, published_at,
+            str(title), str(body), item_key, on_click, published_at, attribution,
         ))
-    return _notify_now(title, body, on_click=on_click, item_key=item_key)
+    return _notify_now(title, body, on_click=on_click, item_key=item_key, attribution=attribution)
 
 
 def _notify_now(title: str, body: str, *, on_click: Callable | None = None,
-                item_key: str | None = None) -> bool:
+                item_key: str | None = None, attribution: str | None = None) -> bool:
     """Submit one toast to Windows; acceptance does not ensure display."""
     if os.name != 'nt':
         print(f'[{title}] {body}')
+        if attribution:
+            print(attribution)
         return True
     activation_url = None
     try:
         from windows_toasts import Toast
 
         toaster = _windows_toaster()
-        toast = Toast()
-        toast.text_fields = [str(title), str(body)]
+        toast = Toast(text_fields=[str(title), str(body)], attribution_text=attribution)
         if item_key is not None:
             toast.tag = hashlib.sha256(item_key.encode('utf-8')).hexdigest()[:16]
         toast.group = 'alerts'

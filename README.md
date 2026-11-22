@@ -143,7 +143,7 @@ Truth Social image OCR also recognizes tightly scoped geopolitical naval phrases
 
 ## User watches and live settings
 
-Besides the built-in oil rules, News Flow headlines can be matched against **user watches**. A watch has a name, keywords and exact `EXCHANGE:SYMBOL` symbols. It alerts when a keyword occurs as a whole word in the headline (case-insensitive; `MSFT` does not match `MSFTX`) or when the provider lists one of its symbols as related. The toast title then names the watch, for example `Trade Alert · Microsoft`. Watches only see what News Flow returns, which is the news for the symbols in the pinned TradingView watchlist; add a company's symbol to that list in TradingView before watching it.
+Besides the built-in oil rules, News Flow headlines can be matched against **user watches**. A watch has a name, keywords and exact `EXCHANGE:SYMBOL` symbols. It alerts when a keyword occurs as a whole word in the headline (case-insensitive; `MSFT` does not match `MSFTX`) or when the provider lists one of its symbols as related. The toast title shows the matching watch name, for example `Microsoft`, or `ENERGY` for an oil alert without a matching watch. The body shows the headline. Watches only see what News Flow returns, which is the news for the symbols in the pinned TradingView watchlist; add a company's symbol to that list in TradingView before watching it.
 
 `oil_watch_enabled` switches the built-in oil rules off without touching the user watches.
 
@@ -178,6 +178,8 @@ For news-latency diagnostics, Trade Alert also persists the first time a provide
 
 The information windows support selection, `Ctrl+A`, `Ctrl+C`, **Copy all**, scrolling, system-aware light/dark mode, and Per-Monitor DPI Awareness V2 on Windows. The button toolbar (including **Show all N** and **Close**) is pinned to a non-expanding bottom row so Windows display scaling and long histories cannot push it below the window. Only the main text pane scrolls and resizes. Headlines in **Latest alerts** are rendered as clickable hyperlinks; TradingView-relative `/news/...` paths are resolved to `https://www.tradingview.com`, while invalid or non-HTTPS links remain plain text. Repeated headlines retain their own article URLs, including after expanding the history. Copying the text preserves the compact layout without exposing hidden URLs.
 
+
+Truth Social toasts show the topic (for example `ENERGY`), or `Trump` when there is no topic, followed by the post excerpt. Text read from an image is marked as OCR. The RSS fallback adds a short warning about the archive after the excerpt. Priority, source and evidence details are retained in the local alert record.
 
 Clicking a new real alert's Windows toast opens its exact persisted HTTPS article URL and marks only that alert as read after the browser reaches the local click handler and receives the article redirect. A DTV `/news/...` path is resolved against `https://www.tradingview.com`, retaining the provider's article path; Trade Alert never constructs a publisher URL from a provider ID. HTTPS links supplied by other feeds are preserved. Relative non-news paths, HTTP, credentials, malformed ports, backslashes and control/whitespace characters are rejected. Without a valid link, clicking opens **Senaste alerts** with just the matching entry and acknowledges it only when the window is shown. Expired entries do nothing; failed browser launches leave entries unread and retryable. Successful repeated clicks on the same toast are ignored and the tray unread badge updates immediately.
 

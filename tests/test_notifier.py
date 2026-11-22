@@ -34,7 +34,14 @@ class NotifierTests(unittest.TestCase):
         accepted, toast, register = self.send()
         self.assertTrue(accepted)
         self.assertIsNone(toast.launch_action)
+        self.assertIsNone(toast.attribution_text)
         register.assert_not_called()
+
+    def test_source_warning_uses_windows_attribution(self):
+        accepted, toast, _ = self.send(attribution="RSS-arkiv · ej verifierad primärkälla")
+        self.assertTrue(accepted)
+        self.assertEqual(['Trade Alert', 'Test'], toast.text_fields)
+        self.assertEqual("RSS-arkiv · ej verifierad primärkälla", toast.attribution_text)
 
     def test_backend_failure_is_reported_and_pending_action_removed(self):
         notifier._click_actions['/alerts/token'] = (Mock(), threading.Lock())
@@ -89,7 +96,7 @@ class NotificationBurstTests(unittest.TestCase):
             send.assert_not_called()
             batch.flush()
             send.assert_called_once_with(
-                "Trade Alert", "11", item_key="event-11", on_click=None,
+                "Trade Alert", "11", item_key="event-11", on_click=None, attribution=None,
             )
             self.assertEqual(1, factory.return_value.start.call_count)
 
@@ -99,11 +106,13 @@ class NotificationBurstTests(unittest.TestCase):
             patch.object(notifier.threading, "Timer"),
             patch.object(notifier, "_notify_now", return_value=True) as send,
         ):
-            batch.offer(notifier._PendingNotification("DTV", "latest", "newer", None, 200.0))
-            batch.offer(notifier._PendingNotification("RSS", "older", "older", None, 100.0))
+            batch.offer(notifier._PendingNotification(
+                "RSS", "latest", "newer", None, 200.0, attribution="RSS-arkiv",
+            ))
+            batch.offer(notifier._PendingNotification("DTV", "older", "older", None, 100.0))
             batch.flush()
             send.assert_called_once_with(
-                "DTV", "latest", item_key="newer", on_click=None,
+                "RSS", "latest", item_key="newer", on_click=None, attribution="RSS-arkiv",
             )
 
     def test_cooldown_collects_next_burst_without_repeated_toasts(self):

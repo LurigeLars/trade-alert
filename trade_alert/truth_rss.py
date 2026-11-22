@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 from .config import Config
 from .trump_filter import classify_trump_statement
 from .event_evidence import assess_truth_evidence
-from .notifier import deliver_alert, notify
+from .notifier import deliver_alert, notify, trump_toast_title
 from .truth_direct import html_to_text
 from .state import StateStore
 
@@ -201,18 +201,20 @@ async def read_rss_once(config: Config, store: StateStore, *,
         score = signal.score
         if score < config.notification_min_score:
             continue
+        text = post.text[:600]
         body = (f"Trump · {signal.priority} / {signal.category} · oberoende RSS-arkiv (ej verifierad primärkälla)\n"
                 + f"Evidens: {evidence.event_kind} · EJ KONTROLLERAD\n"
-                + post.text[:600]
+                + text
                 + "\nPublicerad enligt RSS "
                 + datetime.fromtimestamp(post.published).astimezone().strftime("%H:%M:%S")
                 + f" · upptäckt +{int(max(0, age))} sek"
                 + f"\nBedömning: {evidence.reason}")
         stored, sent = deliver_alert(
-            store, title=f"Trade Alert · Trump {signal.priority} · {signal.category} (RSS)",
+            store, title=trump_toast_title(signal.category),
             item_key=key, source="TRUMP_TRUTH_RSS", provider="Trump's Truth RSS (third party)",
-            headline=post.text[:240], body=body, score=score,
-            published=post.published, link=post.link, at=moment,
+            headline=post.text[:240], body=body,
+            toast_body=text, attribution="RSS-arkiv · ej verifierad primärkälla",
+            score=score, published=post.published, link=post.link, at=moment,
             alert_callback=alert_callback, notification=notification, send=notify,
         )
         alerted += stored

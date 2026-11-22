@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import Config
-from .notifier import deliver_alert, notify
+from .notifier import deliver_alert, notify, trump_toast_title
 from .state import StateStore
 from .truth_direct import DirectUnavailable, parse_statuses
 from .media_ocr import extract_image_text, image_url_from_post
@@ -120,19 +120,20 @@ def poll_browser_feed(
                 store.mark_seen(key, at=now)
                 continue
             store.mark_seen(key, at=now)
-            caption = post.text[:450] if post.text else "[Ingen inläggstext]"
+            caption = post.text[:450]
             image_evidence = ("\n[Bildtext via lokal OCR] " + image_text[:650]) if image_text else ""
             body = (f"Trump · {signal.priority} / {signal.category} · Chrome-källa\n"
                     f"Evidens: {evidence.event_kind} · EJ KONTROLLERAD\n"
-                    f"{caption}{image_evidence}\n"
+                    f"{caption or '[Ingen inläggstext]'}{image_evidence}\n"
                     f"Publicerad {datetime.fromtimestamp(post.published).astimezone():%H:%M:%S}"
                     f" · mottagen +{int(max(0, age))} sek\n"
                     f"Bedömning: {evidence.reason}\n"
                     "Ingen automatisk handel.")
             stored, sent = deliver_alert(
-                store, title=f"Trade Alert · Trump {signal.priority} · {signal.category}",
+                store, title=trump_toast_title(signal.category),
                 item_key=key, source="TRUTH_CHROME", provider="Truth Social (local Chrome tab)",
-                headline=analysis_text[:240], body=body, score=score,
+                headline=analysis_text[:240], body=body,
+                toast_body=f"{caption}{image_evidence}".lstrip("\n"), score=score,
                 published=post.published, link=post.link, at=now,
                 alert_callback=alert_callback, notification=notification, send=notify,
             )
