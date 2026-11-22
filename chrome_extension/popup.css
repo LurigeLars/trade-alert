@@ -40,7 +40,3 @@ label { display: block; font-size: 12px; margin-bottom: 7px; }
 .pair-fields { display: flex; gap: 8px; }
 input { width: 100%; min-width: 0; padding: 9px; background: #111e30; }
 code { overflow-wrap: anywhere; }
-dl { margin: 12px 0 0; font-size: 11px; }
-dl div { display: flex; justify-content: space-between; gap: 10px; margin-top: 7px; }
-dt { color: #c1cddd; }
-dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
