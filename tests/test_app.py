@@ -1,11 +1,13 @@
+import logging
 import pathlib
 import tempfile
 import time
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 from trade_alert.app import (
-    _dtv_since_with_overlap, run_once,
+    _DTVWarningThrottle, _dtv_since_with_overlap, run_once,
 )
 from trade_alert.config import Config
 from trade_alert.news import Headline
@@ -18,6 +20,76 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             "2026-10-08T22:30:00+00:00",
             _dtv_since_with_overlap("2026-10-08T23:30:00+00:00", 3600),
         )
+
+    def test_repeated_dtv_warnings_are_throttled(self):
+        source_filter = _DTVWarningThrottle()
+        def warning() -> logging.LogRecord:
+            return logging.LogRecord(
+                "trade_alert", logging.WARNING, __file__, 1,
+                "DTV News Flow returned a truncated/incomplete freshness window; cursor will not advance",
+                (), None,
+            )
+
+        with patch("trade_alert.app.time.monotonic", side_effect=[100, 110, 1100]):
+            first, repeat, reminder = warning(), warning(), warning()
+            self.assertTrue(source_filter.filter(first))
+            self.assertFalse(source_filter.filter(repeat))
+            self.assertTrue(source_filter.filter(reminder))
+            self.assertIn("suppressed 1", reminder.getMessage())
+
+    async def test_gap_recovery_resumes_without_claiming_missing_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            old_checkpoint = "2026-11-17T16:00:00+00:00"
+            try:
+                store.mark_initialized()
+                store.set_meta("dtv_news_flow_initialized_at", old_checkpoint)
+                store.set_meta("dtv_last_success", old_checkpoint)
+                with patch(
+                    "trade_alert.app._collect",
+                    new=AsyncMock(side_effect=[
+                        ([], False, True), ([], True, True),
+                    ]),
+                ) as acquire:
+                    with self.assertLogs(level="WARNING") as captured:
+                        degraded = await run_once(Config(), store)
+                        recovery = store.get_meta("dtv_recovery_cursor")
+                        self.assertIsNotNone(recovery)
+                        self.assertEqual(old_checkpoint, store.get_meta("dtv_last_success"))
+                        self.assertEqual(old_checkpoint, store.get_meta("dtv_last_gap_from"))
+                        restored = await run_once(Config(), store)
+
+                self.assertFalse(degraded["dtv_ok"])
+                self.assertTrue(restored["dtv_ok"])
+                self.assertEqual("", store.get_meta("dtv_recovery_cursor"))
+                self.assertNotEqual(old_checkpoint, store.get_meta("dtv_last_success"))
+                self.assertTrue(store.get_meta("dtv_last_gap_at"))
+                self.assertIn("history gap", " ".join(captured.output))
+                first_since = datetime.fromisoformat(acquire.call_args_list[0].kwargs["dtv_since"])
+                second_since = datetime.fromisoformat(acquire.call_args_list[1].kwargs["dtv_since"])
+                self.assertLess(first_since, second_since)
+                self.assertLessEqual(
+                    0, (datetime.now(timezone.utc) - second_since).total_seconds()
+                )
+                self.assertLess(
+                    (datetime.now(timezone.utc) - second_since).total_seconds(), 180
+                )
+            finally:
+                store.close()
+
+    async def test_transport_failure_does_not_move_recovery_cursor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            try:
+                with patch(
+                    "trade_alert.app._collect",
+                    new=AsyncMock(return_value=([], False, False)),
+                ):
+                    await run_once(Config(), store)
+                self.assertIsNone(store.get_meta("dtv_recovery_cursor"))
+                self.assertIsNone(store.get_meta("dtv_last_gap_at"))
+            finally:
+                store.close()
 
     async def test_qualifying_signal_is_persisted_and_updates_unread_callback(self):
         with tempfile.TemporaryDirectory() as tmp:
