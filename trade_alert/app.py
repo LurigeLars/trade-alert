@@ -223,7 +223,8 @@ async def run_once(
         watches = matching_watches(item, config.watches)
         age = item.age_seconds
         source_is_initializing = first_cycle or (
-            item.source == "DTV_NEWS_FLOW" and dtv_first_cycle
+            item.source == "DTV_NEWS_FLOW"
+            and (dtv_first_cycle or (dtv_fetched and not dtv_ok))
         )
         baseline_old = source_is_initializing and (
             age is None or age > config.startup_fresh_seconds
