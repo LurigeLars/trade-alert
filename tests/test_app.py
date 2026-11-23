@@ -77,6 +77,35 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 store.close()
 
+    async def test_recovery_does_not_toast_old_backlog(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StateStore(pathlib.Path(tmp) / "state.db")
+            store.mark_initialized()
+            store.set_meta("dtv_news_flow_initialized_at", "2026-11-14T00:00:00Z")
+            old_story = Headline(
+                source="DTV_NEWS_FLOW", item_id="backlog",
+                title="Oil supply interruption in the past",
+                published=time.time() - 7200, provider="Reuters",
+            )
+            live_story = Headline(
+                source="DTV_NEWS_FLOW", item_id="new",
+                title="Oil supply interruption just announced",
+                published=time.time() - 5, provider="Reuters",
+            )
+            try:
+                store.begin_notification_session(started_at=time.time() - 30)
+                with patch(
+                    "trade_alert.app._collect",
+                    new=AsyncMock(return_value=([old_story, live_story], False, True)),
+                ), patch("trade_alert.app.notify", return_value=True) as notify:
+                    result = await run_once(Config(), store)
+                self.assertEqual(1, result["notified"])
+                notify.assert_called_once()
+                self.assertEqual(live_story.key, notify.call_args.kwargs["item_key"])
+                self.assertTrue(store.seen(old_story.key))
+            finally:
+                store.close()
+
     async def test_transport_failure_does_not_move_recovery_cursor(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StateStore(pathlib.Path(tmp) / "state.db")
