@@ -122,6 +122,7 @@ The default example profile is a generic **Oil / Brent** context. The source is 
 - up to 200 headlines per fetch.
 - each successful cursor poll replays a 60-minute publication-time overlap so provider backfills with older `published_at` timestamps are still discovered promptly.
 - provider item IDs are deduplicated locally, so the replay window cannot create duplicate alerts for the same story.
+- after an outage long enough that more than 200 stories have displaced the old checkpoint, News Flow records a persistent historical-coverage gap in `state.db` (`dtv_last_gap_at` and `dtv_last_gap_from`). The tray shows **Datagap · News Flow** in amber while a bounded two-minute replay checkpoint is used to re-establish live continuity. The last fully verified checkpoint is not falsely advanced; a subsequent complete poll restores **Aktiv · News Flow**. Stories absent from TradingView's 200-item source window are **not** recovered, and cannot be claimed to be covered. De-duplication and the normal startup notification cutoff remain unchanged.
 - the watchlist is `dtv_watchlist_id` when set in `config.json`. Pin it there: otherwise the active TradingView watchlist is auto-resolved once and cached only in `state.db`, and losing that file would silently switch to whichever list is active then.
 - auto-resolution requires a verified oil routing anchor before the numeric ID is accepted.
 
@@ -276,7 +277,7 @@ Important settings include:
 
 Local SQLite stores seen-headline dedupe, source cursors, locally resolved watchlist metadata and unread alert history.
 
-`trade-alert.log` rotates at 10 MB and keeps three older files (`trade-alert.log.1` to `.3`). Routine HTTP and MCP request lines from the `httpx`/`httpx2` and `mcp` libraries are logged only at WARNING and above; they used to be more than 90% of the log.
+`trade-alert.log` rotates at 10 MB and keeps three older files (`trade-alert.log.1` to `.3`). Routine HTTP and MCP request lines from the `httpx`/`httpx2` and `mcp` libraries are logged only at WARNING and above; they used to be more than 90% of the log. Unchanged successful News Flow cycles are summarized at most every 15 minutes, while new items, notifications, and health transitions are logged immediately. Repeated DTV connection and truncated-window warnings are throttled to an initial warning plus a 15-minute reminder with the suppressed count; distinct source problems remain visible.
 
 ## Security model
 
