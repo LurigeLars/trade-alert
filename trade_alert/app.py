@@ -33,6 +33,43 @@ LOG_MAX_BYTES = 10_000_000
 LOG_BACKUPS = 3
 
 
+class _DTVWarningThrottle(logging.Filter):
+    """Retain the first source failure and periodic reminders, not every 20-second retry."""
+
+    INTERVAL_SECONDS = 15 * 60
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._last: dict[str, float] = {}
+        self._suppressed: dict[str, int] = {}
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno != logging.WARNING:
+            return True
+        message = record.getMessage()
+        if message.startswith("DTV News Flow returned a truncated/incomplete"):
+            key = "incomplete"
+        elif message.startswith("DTV News Flow unavailable:"):
+            if "CDP connection failed" in message:
+                key = "cdp-timeout" if "timeout" in message.lower() else "cdp-connection"
+            else:
+                key = "provider-unavailable"
+        else:
+            return True
+
+        now = time.monotonic()
+        if now - self._last.get(key, float("-inf")) < self.INTERVAL_SECONDS:
+            self._suppressed[key] = self._suppressed.get(key, 0) + 1
+            return False
+
+        suppressed = self._suppressed.pop(key, 0)
+        self._last[key] = now
+        if suppressed:
+            record.msg = f"{message} (suppressed {suppressed} identical-source warnings)"
+            record.args = ()
+        return True
+
+
 def _setup_logging(verbose: bool = False) -> None:
     app_dir().mkdir(parents=True, exist_ok=True)
     handlers: list[logging.Handler] = [logging.handlers.RotatingFileHandler(
@@ -45,6 +82,7 @@ def _setup_logging(verbose: bool = False) -> None:
         format="%(asctime)s %(levelname)s %(message)s",
         handlers=handlers,
     )
+    logging.getLogger().addFilter(_DTVWarningThrottle())
     # Every MCP call logs several INFO lines (93% of the old log); keep only their problems.
     for noisy in ("httpx", "httpx2", "mcp"):  # mcp 2.x ships its HTTP client as httpx2
         logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -154,9 +192,14 @@ async def run_once(
 ) -> dict:
     first_cycle = not store.initialized()
     dtv_first_cycle = store.get_meta("dtv_news_flow_initialized_at") is None
+    # An irrecoverable 200-item history gap must not pin the live cursor forever.
+    # During bounded resynchronization we deliberately use a shorter replay
+    # window, while keeping the last fully verified checkpoint untouched.
+    recovery_cursor = store.get_meta("dtv_recovery_cursor")
     dtv_since = _dtv_since_with_overlap(
-        store.get_meta("dtv_last_success"),
-        config.dtv_replay_overlap_seconds,
+        recovery_cursor or store.get_meta("dtv_last_success"),
+        min(config.dtv_replay_overlap_seconds, 120)
+        if recovery_cursor else config.dtv_replay_overlap_seconds,
     )
     items, dtv_ok, dtv_fetched = await _collect(config, store, dtv_since=dtv_since)
     now = time.time()
@@ -207,14 +250,29 @@ async def run_once(
 
     if dtv_ok:
         store.set_meta("dtv_last_success", datetime.now(timezone.utc).isoformat())
+        if recovery_cursor:
+            store.set_meta("dtv_recovery_cursor", "")
+            logging.warning(
+                "DTV News Flow resumed live coverage after a history gap; "
+                "older unavailable stories have not been recovered"
+            )
+    elif dtv_fetched:
+        recovery_at = datetime.now(timezone.utc).isoformat()
+        if not recovery_cursor:
+            store.set_meta("dtv_last_gap_at", recovery_at)
+            store.set_meta(
+                "dtv_last_gap_from", store.get_meta("dtv_last_success") or ""
+            )
+            logging.warning(
+                "DTV News Flow history gap exceeds the 200-item source window; "
+                "resynchronizing live coverage without asserting historical completeness"
+            )
+        store.set_meta("dtv_recovery_cursor", recovery_at)
     if dtv_fetched and dtv_first_cycle:
         store.set_meta("dtv_news_flow_initialized_at", datetime.now(timezone.utc).isoformat())
     if first_cycle:
         store.mark_initialized()
     store.prune()
-
-    if not dtv_ok:
-        logging.warning("DTV News Flow failed or returned an incomplete window this cycle")
 
     return {
         "fresh": fresh,
@@ -242,6 +300,8 @@ async def _run_news_loop(
     alert_callback=None,
     reloader: ConfigReloader | None = None,
 ) -> None:
+    last_cycle_log_at = float("-inf")
+    last_cycle_health: str | None = None
     while stop_event is None or not stop_event.is_set():
         if reloader is not None:
             reloader.poll()
@@ -253,13 +313,27 @@ async def _run_news_loop(
 
         try:
             result = await run_once(config, store, alert_callback=alert_callback)
-            logging.info(
-                "cycle fresh=%s notified=%s dtv=%s",
-                result["fresh"], result["notified"], result["dtv_ok"],
+            cycle_health = (
+                "ok" if result["dtv_ok"] else
+                "recovering" if result["dtv_fetched"] else "error"
             )
+            logged_at = time.monotonic()
+            if (
+                cycle_health != last_cycle_health
+                or result["fresh"] or result["notified"]
+                or logged_at - last_cycle_log_at >= 15 * 60
+            ):
+                logging.info(
+                    "cycle fresh=%s notified=%s dtv=%s status=%s",
+                    result["fresh"], result["notified"], result["dtv_ok"], cycle_health,
+                )
+                last_cycle_log_at = logged_at
+            last_cycle_health = cycle_health
             if status_callback is not None:
                 if result["dtv_ok"]:
                     status_callback("Aktiv · News Flow", "ok")
+                elif result["dtv_fetched"]:
+                    status_callback("Datagap · News Flow", "waiting")
                 else:
                     status_callback("Källfel · News Flow", "error")
         except Exception:
