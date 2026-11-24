@@ -1,8 +1,11 @@
+import os
+import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from trade_alert.mcp_client import MCPToolError
+from trade_alert.mcp_client import MCPToolError, dtv_auth_headers
 from trade_alert.news import (
     DTVWatchlistContext,
     fetch_dtv_news,
@@ -10,6 +13,16 @@ from trade_alert.news import (
     relevance_score,
     resolve_dtv_watchlist,
 )
+
+
+class DTVAuthTests(unittest.TestCase):
+    def test_reads_dtv_bearer_token_file_and_tolerates_absence(self):
+        with tempfile.TemporaryDirectory() as root, patch.dict(os.environ, {"LOCALAPPDATA": root}):
+            self.assertEqual({}, dtv_auth_headers())
+            token_file = Path(root) / "tradingview-mcp" / "http-token"
+            token_file.parent.mkdir()
+            token_file.write_text("abc123" + chr(10), encoding="utf-8")
+            self.assertEqual({"Authorization": "Bearer abc123"}, dtv_auth_headers())
 
 
 class NewsTests(unittest.IsolatedAsyncioTestCase):

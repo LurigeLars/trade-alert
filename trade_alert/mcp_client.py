@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 from typing import Any
 
+import httpx2
 from mcp.client import Client
+from mcp.client.streamable_http import streamable_http_client
 
 
 class MCPToolError(RuntimeError):
@@ -17,6 +21,16 @@ def _json_from_text(text: str) -> Any:
         return text
 
 
+def dtv_auth_headers() -> dict[str, str]:
+    """Bearer token the local DTV HTTP server requires; written by that server on first start."""
+    root = Path(os.environ.get("LOCALAPPDATA") or Path.home())
+    try:
+        token = (root / "tradingview-mcp" / "http-token").read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return {}
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
 async def call_json_tool(url: str, name: str, arguments: dict[str, Any]) -> Any:
     """Call one local MCP tool and decode its outer text envelope.
 
@@ -24,7 +38,8 @@ async def call_json_tool(url: str, name: str, arguments: dict[str, Any]) -> Any:
     normalizer intentionally handles that nested shape rather than rebuilding provider payloads here.
     """
     try:
-        async with Client(url) as client:
+        http = httpx2.AsyncClient(headers=dtv_auth_headers(), timeout=httpx2.Timeout(30.0, read=300.0))
+        async with http, Client(streamable_http_client(url, http_client=http)) as client:
             result = await client.call_tool(name, arguments)
     except Exception as exc:
         raise MCPToolError(f"{name}: transport unavailable") from exc
