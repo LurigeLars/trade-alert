@@ -204,7 +204,8 @@ Trade Alert sets a stable Windows AppUserModelID and uses a **fixed, green, badg
 - Windows 10/11.
 - Python 3.12+.
 - [uv](https://docs.astral.sh/uv/).
-- TradingView Desktop MCP for the primary News Flow path.
+- TradingView Desktop MCP for the primary News Flow path. Its local HTTP endpoint requires a
+  bearer token; Trade Alert reads it from `%LOCALAPPDATA%\tradingview-mcp\http-token` on each call.
 
 Clone and install:
 
